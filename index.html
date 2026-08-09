@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Map Designer</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <header>
+      <h1>Map Designer</h1>
+      <status-notify></status-notify>
+    </header>
+
+    <main>
+      <div class="overview-panel">
+        <map-artwork></map-artwork>
+      </div>
+
+      <section class="toolbar">
+        <nav class="popover-buttons">
+          <button class="popover-button" popovertarget="panel-detail">Details</button>
+          <button class="popover-button" popovertarget="panel-style">Style</button>
+          <button class="popover-button" popovertarget="panel-map">Map</button>
+        </nav>
+        <div class="popover-panel" id="panel-detail" popover>
+          <map-artwork-detail></map-artwork-detail>
+        </div>
+        <div class="popover-panel" id="panel-style" popover>
+          <layer-control-list></layer-control-list>
+        </div>
+        <div class="popover-panel" id="panel-map" popover>
+          <map-osm id="nav-map"></map-osm>
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <export-pdf></export-pdf>
+      <span class="attribution">
+        ©
+        <a href="https://www.openstreetmap.org/copyright" target="_blank"
+          >OpenStreetMap contributors</a
+        >
+      </span>
+    </footer>
+
+    <script type="module" src="./src/main.js"></script>
+  </body>
+</html>
