@@ -54,7 +54,7 @@ export async function exportPNG(osmData, bbox) {
       document.body.removeChild(a);
       URL.revokeObjectURL(url);
 
-      onStatus('Export complete — roskilde-map.png downloaded.');
+      state.set('statusText', 'Export complete — roskilde-map.png downloaded.')
     }, 'image/png');
   } catch (err) {
     const msg = `Export failed: ${err.message}`;
