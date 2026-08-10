@@ -13,9 +13,17 @@ const DEFAULT_CENTER = [12, 55.5] // XY-type coordinate
 const DEFAULT_ZOOM = 12
 
 /**
- * App-wide state. Use `state.get('prop')` to read, `state.set('prop', value)`
- * / `state.update({ ...partial })` to write, and
- * `state.subscribe('prop', (value, prev) => ...)` to react to changes.
+ * App-wide state.
+ *
+ * Read:
+ * `state.get('prop')`
+ *
+ * Write:
+ * `state.set('prop', value)` or
+ * `state.update({ ...partial })`
+ *
+ * React to changes:
+ * `state.subscribe('prop', (value, prev) => ...)`
  */
 const state = createStore({
   center: DEFAULT_CENTER,

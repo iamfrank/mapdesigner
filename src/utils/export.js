@@ -8,7 +8,6 @@ import state from './state.js'
  *
  * @param {{ streets: [number,number][][], coastlines: [number,number][][] }} osmData
  * @param {[number,number,number,number]} bbox  [minLat, minLon, maxLat, maxLon]
- * @param {(msg: string) => void} onStatus
  */
 export async function exportPNG(osmData, bbox) {
   const confirmed = confirm(
@@ -37,12 +36,12 @@ export async function exportPNG(osmData, bbox) {
     renderWays(ctx, osmData.streets, printTransform, '#000000', 1);
     renderWays(ctx, osmData.coastlines, printTransform, '#cc0000', 2);
 
-    onStatus('Encoding PNG…');
+    state.set('statusText', 'Encoding PNG…')
     await new Promise((r) => setTimeout(r, 60));
 
     offscreen.toBlob((blob) => {
       if (!blob) {
-        onStatus('Export failed: PNG encoding returned no data.');
+        state.set('statusText', 'Export failed: PNG encoding returned no data.')
         return;
       }
 
@@ -59,7 +58,7 @@ export async function exportPNG(osmData, bbox) {
     }, 'image/png');
   } catch (err) {
     const msg = `Export failed: ${err.message}`;
-    onStatus(msg);
+    state.set('statusText', msg)
     alert(msg);
     console.error(err);
   }

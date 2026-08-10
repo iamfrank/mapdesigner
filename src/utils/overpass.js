@@ -1,12 +1,28 @@
 import { OVERPASS_URL } from './state.js'
 import state from './state.js'
 
+export async function updateOsmData() {
+  try {
+    const osmData = await fetchOSMData();
+    if (osmData) {
+      state.update({
+        osmData,
+        statusText: `Loaded: ${osmData.streets.length.toLocaleString()} street ways, ${osmData.coastlines.length.toLocaleString()} coastline ways`
+      })
+      exportBtn.disabled = false;
+    }
+
+  } catch (err) {
+    state.set('statusText', `Error: ${err.message}`)
+    console.error(err);
+  }
+}
+
 /**
  * Fetch OSM ways (highways + coastlines) for the configured bounding box.
  * See
  * - https://wiki.openstreetmap.org/wiki/Map_features
  * - https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide
- * @param {(msg: string) => void} onStatus  – called with progress messages
  * @returns {Promise<{ streets: [number,number][][], coastlines: [number,number][][] }>}
  */
 export async function fetchOSMData() {
@@ -38,7 +54,7 @@ out skel qt;`;
     );
   }
 
-  onStatus("Parsing OSM data…");
+  state.set('statusText', 'Parsing OSM data…')
   const json = await response.json();
   return parseOSMData(json);
 }

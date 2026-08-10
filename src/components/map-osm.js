@@ -36,8 +36,6 @@ export class OsmMap extends HTMLElement {
       zoom: zoom,
     })
 
-    console.log('view', this.view.getCenter())
-
     this.map = new Map({
       target: this.container,
       view: this.view,
@@ -64,15 +62,14 @@ export class OsmMap extends HTMLElement {
   }
 
   #onMoveEnd() {
-    console.log('onmove')
     const [lon, lat] = toLonLat(this.view.getCenter());
     const zoom = this.view.getZoom();
     const bbox = this.map.getView().calculateExtent(this.map.getSize())
-
+    const overpassReadyBBOX = [bbox[1],bbox[0],bbox[3],bbox[2]]
     state.update({
       center: [lon, lat],
       zoom,
-      bbox,
+      bbox: overpassReadyBBOX,
       statusText: `Map moved → lon\u00a0${lon.toFixed(4)},\u00a0lat\u00a0${lat.toFixed(4)},\u00a0zoom\u00a0${zoom.toFixed(1)}`
     })
   }
