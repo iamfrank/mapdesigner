@@ -18,19 +18,9 @@ body {
 }
 
 /* ── Header ── */
-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 0.6rem 1.2rem;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
-  flex-shrink: 0;
-}
 
 header h1 {
-  font-size: 1.4rem;
-  color: #2c7a7b;
+  margin: 1rem;
 }
 
 .status {
@@ -99,6 +89,8 @@ main {
 /* ── Footer ── */
 footer {
   display: flex;
+  flex-flow: row nowrap;
+  justify-content: space-between;
   align-items: center;
   gap: 1.2rem;
   padding: 0.55rem 1.2rem;

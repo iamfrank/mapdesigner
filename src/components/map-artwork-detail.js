@@ -31,9 +31,7 @@ export class ArtworkDetailMap extends HTMLElement {
     this.innerHTML = `
       <p class="detail-title">Detail sample</p>
       <canvas id="canvas-detail"></canvas>
-      <p class="detail-label">
-        Detail at A0 / 300 DPI scale — Roskilde Fjord / Køge Bay
-      </p>
+      <p class="detail-label">Detail at A0 / 300 DPI scale</p>
     `
     this.canvasEl = document.getElementById("canvas-detail");
     // Size canvases before showing anything

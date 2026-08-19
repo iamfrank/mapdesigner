@@ -9,3 +9,10 @@ map-osm .map-container {
   width: 100%;
   height: 100%;
 }
+
+map-osm .map-set-view-button {
+  position: absolute;
+  z-index: 10;
+  bottom: 1rem;
+  right: 1rem;
+}

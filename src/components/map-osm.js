@@ -15,6 +15,7 @@ export class OsmMap extends HTMLElement {
 
   /** @type {HTMLDivElement | null} */
   container = null;
+  button = null;
 
   // ── Lifecycle ──────────────────────────────────────────────────────────────
 
@@ -24,6 +25,12 @@ export class OsmMap extends HTMLElement {
     this.container = document.createElement('div');
     this.container.className = 'map-container';
     this.appendChild(this.container);
+
+    // Build a button to dispatch new view
+    this.button = document.createElement('button')
+    this.button.className = 'map-set-view-button';
+    this.button.innerText = 'Update'
+    this.appendChild(this.button);
 
     const center = state.get('center');
     const zoom = state.get('zoom');
@@ -47,7 +54,9 @@ export class OsmMap extends HTMLElement {
     });
 
     // `moveend` fires once per interaction (pan, zoom, keyboard, double-click…)
-    this.map.on('moveend', () => this.#onMoveEnd());
+    this.button.addEventListener('click', (e) => {
+      this.#setNewView()
+    })
 
     // The map container can start out with zero size (e.g. while nested in a
     // collapsed <toggle-panel>) or be resized later when it's revealed. Keep
@@ -61,7 +70,7 @@ export class OsmMap extends HTMLElement {
     this.resizeObserver?.disconnect();
   }
 
-  #onMoveEnd() {
+  #setNewView() {
     const [lon, lat] = toLonLat(this.view.getCenter());
     const zoom = this.view.getZoom();
     const bbox = this.map.getView().calculateExtent(this.map.getSize())
