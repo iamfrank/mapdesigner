@@ -1,5 +1,5 @@
 import { computeTransform } from "../utils/projection.js";
-import { clearCanvas, renderWays } from "../utils/render.js";
+import { clearCanvas, renderLayer } from "../utils/render.js";
 import state from '../utils/state.js'
 
 export class ArtworkMap extends HTMLElement {
@@ -39,7 +39,7 @@ export class ArtworkMap extends HTMLElement {
     clearCanvas(this.ctx);
     styles.forEach((style) => {
       if (style.visible) {
-        renderWays(this.ctx, osmData[style.id], transform, style.color, style.stroke);
+        renderLayer(this.ctx, osmData[style.id], transform, style);
       }
     });
   }

@@ -99,7 +99,8 @@ footer {
   flex-shrink: 0;
 }
 
-#btn-export {
+#btn-export-png,
+#btn-export-pdf {
   padding: 0.4rem 1.1rem;
   background: #2c7a7b;
   color: #fff;
@@ -109,11 +110,13 @@ footer {
   cursor: pointer;
 }
 
-#btn-export:hover {
+#btn-export-png:hover,
+#btn-export-pdf:hover {
   background: #1f5f60;
 }
 
-#btn-export:disabled {
+#btn-export-png:disabled,
+#btn-export-pdf:disabled {
   background: #aaa;
   cursor: default;
 }
@@ -151,7 +154,9 @@ footer {
   }
 
   .popover-panel {
-    display: block;
+    display: flex;
+    flex-flow: column nowrap;
+    gap: 0.6rem;
     position: fixed;
     left: auto;
     right: -100%;
@@ -163,9 +168,96 @@ footer {
     box-shadow: 0 0.5rem 0.5rem 0.25rem hsla(0,0%,0%,0.3);
     border: none;
     padding: 0.5rem;
+    overflow-y: auto;
     transition: right 0.3s;
   }
   .popover-panel:popover-open {
     right: 0;
   }
+}
+
+map-osm {
+  flex: 1;
+  min-height: 20rem;
+}
+
+.location-search-form,
+.location-coord-form,
+distance-control,
+paper-size-control,
+poster-text-control {
+  display: flex;
+  flex-flow: row wrap;
+  align-items: center;
+  gap: 0.4rem;
+  font-size: 0.85rem;
+}
+
+.location-search-form input[type="text"],
+.location-coord-form input[type="number"] {
+  flex: 1;
+  min-width: 6rem;
+  padding: 0.25rem 0.4rem;
+}
+
+.location-search-results {
+  list-style: none;
+  width: 100%;
+  max-height: 8rem;
+  overflow-y: auto;
+}
+
+.location-search-results li button {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0.2rem 0;
+  cursor: pointer;
+  font-size: 0.8rem;
+}
+
+.location-search-results li button:hover {
+  text-decoration: underline;
+}
+
+.location-search-status {
+  color: #777;
+  font-size: 0.8rem;
+}
+
+distance-control {
+  width: 100%;
+}
+
+distance-control input[type="range"] {
+  flex: 1;
+}
+
+distance-control input[type="number"] {
+  width: 5rem;
+}
+
+paper-size-control,
+poster-text-control {
+  flex-direction: column;
+  align-items: stretch;
+  border-top: 1px solid #eee;
+  padding-top: 0.5rem;
+}
+
+.paper-size-custom {
+  display: flex;
+  gap: 0.4rem;
+  align-items: center;
+}
+
+.paper-size-info {
+  font-size: 0.78rem;
+  color: #777;
+}
+
+export-pdf {
+  display: flex;
+  gap: 0.5rem;
 }

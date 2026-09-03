@@ -1,5 +1,5 @@
 export class LayerStyleControl extends HTMLElement {
-  static observedAttributes = ["id", "label", "color", "stroke", "visible"];
+  static observedAttributes = ["id", "label", "color", "stroke", "visible", "mode"];
 
   state = {
     id: "",
@@ -7,6 +7,7 @@ export class LayerStyleControl extends HTMLElement {
     color: "",
     stroke: 0,
     visible: false,
+    mode: "stroke",
   };
 
   constructor() {
@@ -34,6 +35,9 @@ export class LayerStyleControl extends HTMLElement {
       case "visible":
         this.state.visible = Boolean(newValue);
         break;
+      case "mode":
+        this.state.mode = String(newValue);
+        break;
       default:
       // Nothing
     }
@@ -41,15 +45,18 @@ export class LayerStyleControl extends HTMLElement {
   }
 
   render(state) {
+    const isFill = state.mode === "fill";
     this.innerHTML = `
       <input type="checkbox" id="${state.id}-visible" ${state.visible ? "checked" : ""}>
       <label for="${state.id}-visible">${state.label}</label>
-      <label for="${state.id}-color">Stroke color</label>
+      <label for="${state.id}-color">${isFill ? "Fill color" : "Stroke color"}</label>
       <input class="layer-color-select" type="color" id="${state.id}-color" value="${state.color}">
+      ${isFill ? "" : `
       <label for="${state.id}-stroke">Stroke width</label>
       <input class="layer-color-select" type="number" id="${state.id}-stroke" value="${state.stroke}">
+      `}
     `;
-    this.querySelector(`#${state.id}-stroke`).addEventListener(
+    this.querySelector(`#${state.id}-stroke`)?.addEventListener(
       "change",
       (ev) => {
         this.state.stroke = Number(ev.target.value);

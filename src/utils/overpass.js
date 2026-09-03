@@ -7,9 +7,13 @@ export async function updateOsmData() {
     if (osmData) {
       state.update({
         osmData,
-        statusText: `Loaded: ${osmData.streets.length.toLocaleString()} street ways, ${osmData.coastlines.length.toLocaleString()} coastline ways`
+        statusText: `Loaded: ${osmData.streets.length.toLocaleString()} streets, ` +
+          `${osmData.water.length.toLocaleString()} water, ` +
+          `${osmData.parks.length.toLocaleString()} parks, ` +
+          `${osmData.buildings.length.toLocaleString()} buildings, ` +
+          `${osmData.railways.length.toLocaleString()} railways, ` +
+          `${osmData.coastlines.length.toLocaleString()} coastline ways`
       })
-      exportBtn.disabled = false;
     }
 
   } catch (err) {
@@ -19,11 +23,12 @@ export async function updateOsmData() {
 }
 
 /**
- * Fetch OSM ways (highways + coastlines) for the configured bounding box.
+ * Fetch OSM ways (highways, coastlines, water, parks/green space, buildings,
+ * railways) for the configured bounding box.
  * See
  * - https://wiki.openstreetmap.org/wiki/Map_features
  * - https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide
- * @returns {Promise<{ streets: [number,number][][], coastlines: [number,number][][] }>}
+ * @returns {Promise<{ streets: [number,number][][], coastlines: [number,number][][], water: [number,number][][], parks: [number,number][][], buildings: [number,number][][], railways: [number,number][][] }>}
  */
 export async function fetchOSMData() {
   const bbox = state.get('bbox')
@@ -31,10 +36,19 @@ export async function fetchOSMData() {
   if (!bbox) {
     return
   }
-  const query = `[out:json][timeout:90][bbox:${bbox.join(',')}];
+  const query = `[out:json][timeout:120][bbox:${bbox.join(',')}];
 (
   way["highway"];
   way["natural"="coastline"];
+  way["natural"="water"];
+  way["landuse"="reservoir"];
+  way["leisure"="park"];
+  way["landuse"="forest"];
+  way["landuse"="grass"];
+  way["landuse"="meadow"];
+  way["natural"="wood"];
+  way["building"];
+  way["railway"];
 );
 out body;
 >;
@@ -60,9 +74,10 @@ out skel qt;`;
 }
 
 /**
- * Parse an Overpass JSON response into arrays of polylines.
+ * Parse an Overpass JSON response into arrays of polylines, bucketed by
+ * feature category.
  * @param {object} json
- * @returns {{ streets: [number,number][][], coastlines: [number,number][][] }}
+ * @returns {{ streets: [number,number][][], coastlines: [number,number][][], water: [number,number][][], parks: [number,number][][], buildings: [number,number][][], railways: [number,number][][] }}
  */
 function parseOSMData(json) {
   // Build a map of nodeId → {lon, lat}
@@ -75,6 +90,10 @@ function parseOSMData(json) {
 
   const streets = [];
   const coastlines = [];
+  const water = [];
+  const parks = [];
+  const buildings = [];
+  const railways = [];
 
   for (const el of json.elements) {
     if (el.type !== "way") continue;
@@ -84,15 +103,35 @@ function parseOSMData(json) {
 
     if (coords.length < 2) continue;
 
-    if (el.tags?.natural === "coastline") {
+    const tags = el.tags ?? {};
+
+    if (tags.natural === "coastline") {
       coastlines.push(coords);
-    } else if (el.tags?.highway) {
+    } else if (
+      tags.natural === "water" ||
+      tags.landuse === "reservoir"
+    ) {
+      water.push(coords);
+    } else if (
+      tags.leisure === "park" ||
+      tags.landuse === "forest" ||
+      tags.landuse === "grass" ||
+      tags.landuse === "meadow" ||
+      tags.natural === "wood"
+    ) {
+      parks.push(coords);
+    } else if (tags.building) {
+      buildings.push(coords);
+    } else if (tags.railway) {
+      railways.push(coords);
+    } else if (tags.highway) {
       streets.push(coords);
     }
   }
 
   console.info(
-    `Parsed: ${streets.length} street ways, ${coastlines.length} coastline ways`,
+    `Parsed: ${streets.length} streets, ${water.length} water, ${parks.length} parks, ` +
+    `${buildings.length} buildings, ${railways.length} railways, ${coastlines.length} coastline ways`,
   );
-  return { streets, coastlines };
+  return { streets, coastlines, water, parks, buildings, railways };
 }

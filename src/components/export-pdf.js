@@ -1,9 +1,10 @@
 import state from "../utils/state.js";
-import { exportPNG } from "../utils/export.js";
+import { exportPNG, exportPDF } from "../utils/export.js";
 
 export class ExportPDF extends HTMLElement {
 
-  buttonEl
+  pngButtonEl
+  pdfButtonEl
 
   constructor() {
     super();
@@ -14,23 +15,25 @@ export class ExportPDF extends HTMLElement {
   }
 
   render() {
-    this.innerHTML = `<button id="btn-export" disabled>Export PNG</button>`
-    this.buttonEl = this.querySelector('button')
-    this.buttonEl.addEventListener('click', this.clickHandler.bind(this))
+    this.innerHTML = `
+      <button id="btn-export-png" disabled>Export PNG</button>
+      <button id="btn-export-pdf" disabled>Export PDF</button>
+    `
+    this.pngButtonEl = this.querySelector('#btn-export-png')
+    this.pdfButtonEl = this.querySelector('#btn-export-pdf')
+    this.pngButtonEl.addEventListener('click', () => this.#export(exportPNG))
+    this.pdfButtonEl.addEventListener('click', () => this.#export(exportPDF))
     state.subscribe('osmData', (osmData) => {
-      if (osmData) {
-        this.buttonEl.disabled = false
-      } else {
-        this.buttonEl.disabled = true
-      }
+      this.pngButtonEl.disabled = !osmData
+      this.pdfButtonEl.disabled = !osmData
     })
   }
 
-  clickHandler(ev) {
+  #export(fn) {
     if (!state.get("osmData")) {
       alert("OSM data not loaded yet.");
       return;
     }
-    exportPNG(state.get("osmData"), state.get("bbox"));
+    fn(state.get("osmData"), state.get("bbox"));
   }
 }

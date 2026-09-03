@@ -24,6 +24,7 @@ export class LayerControlList extends HTMLElement {
             label="${style.label}"
             visible="${style.visible}"
             color="${style.color}"
+            mode="${style.mode}"
             stroke="${style.stroke}">
           </layer-style-control>
         </li>`,
