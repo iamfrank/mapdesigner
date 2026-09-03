@@ -9,7 +9,9 @@ export const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
 const DEFAULT_CENTER = [12, 55.5]; // [lon, lat]
 const DEFAULT_ZOOM = 12;
-const DEFAULT_DISTANCE_M = 9000; // half-height radius, metres
+// Roughly matches the default centre/zoom above, so the app has something to
+// show before the user has interacted with the nav map at all.
+const DEFAULT_BBOX = [55.4192, 11.899, 55.5808, 12.101]; // [minLat, minLon, maxLat, maxLon]
 const DEFAULT_PAPER_SIZE = "A0";
 const DEFAULT_DPI = 300;
 
@@ -27,9 +29,13 @@ const DEFAULT_DPI = 300;
  * `state.subscribe('prop', (value, prev) => ...)`
  */
 const state = createStore({
+  // Poster centre + geographic extent. Both are set together whenever the
+  // user commits a location — by clicking the nav map, panning then clicking
+  // "Use this view", or searching — so they're always in sync with what's
+  // fetched and rendered.
   center: DEFAULT_CENTER,
-  bbox: null,
   zoom: DEFAULT_ZOOM,
+  bbox: DEFAULT_BBOX,
   osmData: null,
 
   // Print/paper configuration
@@ -37,9 +43,6 @@ const state = createStore({
   customWidthMM: 420,
   customHeightMM: 594,
   dpi: DEFAULT_DPI,
-
-  // Map extent configuration
-  distanceM: DEFAULT_DISTANCE_M,
 
   // Poster text
   title: "",

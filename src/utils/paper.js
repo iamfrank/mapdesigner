@@ -46,28 +46,3 @@ export function computePrintPx({ paperSizeId, customWidthMM, customHeightMM, dpi
   const { wMM, hMM } = resolvePaperMM({ paperSizeId, customWidthMM, customHeightMM });
   return { w: mmToPx(wMM, dpi), h: mmToPx(hMM, dpi) };
 }
-
-const METERS_PER_DEG_LAT = 111_320;
-
-/**
- * Compute a lat/lon bounding box centred on a point, sized so that its
- * aspect ratio matches the target paper, using `distanceM` as the
- * half-height ("radius") of the box in metres.
- *
- * @param {number} centerLon
- * @param {number} centerLat
- * @param {number} distanceM   Half-height radius in metres
- * @param {number} aspect      width / height ratio of the target paper
- * @returns {[number, number, number, number]}  [minLat, minLon, maxLat, maxLon]
- */
-export function computeBBoxFromCenter(centerLon, centerLat, distanceM, aspect) {
-  const halfHeightM = distanceM;
-  const halfWidthM = distanceM * aspect;
-
-  const metersPerDegLon = METERS_PER_DEG_LAT * Math.cos((centerLat * Math.PI) / 180);
-
-  const dLat = halfHeightM / METERS_PER_DEG_LAT;
-  const dLon = halfWidthM / metersPerDegLon;
-
-  return [centerLat - dLat, centerLon - dLon, centerLat + dLat, centerLon + dLon];
-}

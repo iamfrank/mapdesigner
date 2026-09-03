@@ -181,9 +181,27 @@ map-osm {
   min-height: 20rem;
 }
 
+#btn-fetch-data {
+  padding: 0.45rem 1rem;
+  background: #2c7a7b;
+  color: #fff;
+  border: none;
+  border-radius: 4px;
+  font-size: 0.9rem;
+  cursor: pointer;
+}
+
+#btn-fetch-data:hover {
+  background: #1f5f60;
+}
+
+#btn-fetch-data:disabled {
+  background: #aaa;
+  cursor: default;
+}
+
 .location-search-form,
-.location-coord-form,
-distance-control,
+location-search,
 paper-size-control,
 poster-text-control {
   display: flex;
@@ -193,49 +211,14 @@ poster-text-control {
   font-size: 0.85rem;
 }
 
-.location-search-form input[type="text"],
-.location-coord-form input[type="number"] {
+.location-search-form {
+  width: 100%;
+}
+
+.location-search-form input[type="text"] {
   flex: 1;
   min-width: 6rem;
   padding: 0.25rem 0.4rem;
-}
-
-.location-search-results {
-  list-style: none;
-  width: 100%;
-  max-height: 8rem;
-  overflow-y: auto;
-}
-
-.location-search-results li button {
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: none;
-  padding: 0.2rem 0;
-  cursor: pointer;
-  font-size: 0.8rem;
-}
-
-.location-search-results li button:hover {
-  text-decoration: underline;
-}
-
-.location-search-status {
-  color: #777;
-  font-size: 0.8rem;
-}
-
-distance-control {
-  width: 100%;
-}
-
-distance-control input[type="range"] {
-  flex: 1;
-}
-
-distance-control input[type="number"] {
-  width: 5rem;
 }
 
 paper-size-control,
