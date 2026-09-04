@@ -7,50 +7,42 @@
     <link rel="stylesheet" href="./src/style.css" />
   </head>
   <body>
-    <header>
-      <h1>Map Designer</h1>
 
-    </header>
+    <section class="toolbar">
+      <h1>Mapdesigner</h1>
 
-    <main>
-      <div class="overview-panel">
-        <map-artwork></map-artwork>
-      </div>
+      <h2>Location</h2>
+      <location-search></location-search>
+      <map-osm id="nav-map"></map-osm>
+      <fetch-data-control></fetch-data-control>
 
-      <section class="toolbar">
-        <nav class="popover-buttons">
-          <button class="popover-button" popovertarget="panel-map">Map</button>
-          <button class="popover-button" popovertarget="panel-style">Style</button>
-          <button class="popover-button" popovertarget="panel-export">Export</button>
-        </nav>
-        <div class="popover-panel" id="panel-style" popover>
-          <layer-control-list></layer-control-list>
-        </div>
-        <div class="popover-panel" id="panel-map" popover>
-          <location-search></location-search>
-          <map-osm id="nav-map"></map-osm>
-          <fetch-data-control></fetch-data-control>
-        </div>
-        <div class="popover-panel" id="panel-export" popover>
-          <paper-size-control></paper-size-control>
-          <poster-text-control></poster-text-control>
-          <map-artwork-detail></map-artwork-detail>
-          <export-pdf></export-pdf>
-        </div>
-      </section>
-    </main>
+      <details>
+        <summary>Styles</summary>
+        <layer-control-list></layer-control-list>
+      </details>
+      <details>
+        <summary>Size settings</summary>
+        <paper-size-control></paper-size-control>
+      </details>
+      <details>
+        <summary>Export</summary>
+        <poster-text-control></poster-text-control>
+        <map-artwork-detail></map-artwork-detail>
+        <export-pdf></export-pdf>
+      </details>
+      <footer>
+        <status-notify></status-notify>
+        <p class="attribution">
+          By <a href="https://github.com/iamfrank">Iamfrank</a>
+          with support from
+          <a href="https://www.openstreetmap.org/copyright" target="_blank">
+            OpenStreetMap contributors
+          </a>
+        </p>
+      </footer>
+    </section>
 
-    <footer>
-      <status-notify></status-notify>
-
-      <span class="attribution">
-        By <a href="https://github.com/iamfrank">Iamfrank</a>
-        with support from
-        <a href="https://www.openstreetmap.org/copyright" target="_blank">
-          OpenStreetMap contributors
-        </a>
-      </span>
-    </footer>
+    <map-artwork></map-artwork>
 
     <script type="module" src="./src/main.js"></script>
   </body>

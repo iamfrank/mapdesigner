@@ -49,8 +49,8 @@ export class ArtworkMap extends HTMLElement {
    * viewport, respecting the A0 portrait aspect ratio (1 : √2).
    */
   sizeOverviewCanvas(canvasElement) {
-    const headerH = document.querySelector("header").offsetHeight;
-    const footerH = document.querySelector("footer").offsetHeight;
+    const headerH = document.querySelector("header")?.offsetHeight ?? 0;
+    const footerH = document.querySelector("footer")?.offsetHeight ?? 0;
     // Leave 55 % of viewport width for the overview column
     const maxW = window.innerWidth * 0.55;
     const maxH = (window.innerHeight - headerH - footerH) * 0.92;
