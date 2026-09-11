@@ -1,7 +1,7 @@
 import { DETAIL_W, DETAIL_H, getPrintPx } from '../utils/state.js'
 import state from '../utils/state.js'
 import { computeTransform, computeDetailTransform } from "../utils/projection.js";
-import { clearCanvas, renderLayer } from "../utils/render.js";
+import { clearCanvas, renderLayer, renderSea } from "../utils/render.js";
 
 export class ArtworkDetailMap extends HTMLElement {
   canvasEl
@@ -59,6 +59,12 @@ export class ArtworkDetailMap extends HTMLElement {
       DETAIL_H,
     );
     clearCanvas(this.ctx);
+
+    const waterStyle = styles.find((s) => s.id === 'water');
+    if (waterStyle?.visible) {
+      renderSea(this.ctx, osmData.coastlines, detailTransform, waterStyle.color);
+    }
+
     styles.forEach((style) => {
       if (style.visible) {
         renderLayer(this.ctx, osmData[style.id], detailTransform, style);

@@ -8,9 +8,11 @@ import state from '../utils/state.js'
 /**
  * Nav map used to frame the poster area. Its current view extent *is* the
  * bbox that gets fetched/rendered — there's no separate "distance" or
- * aspect-ratio math involved. Three ways to commit a location:
+ * aspect-ratio math involved. The view's centre/zoom/bbox are kept in sync
+ * with state on every pan/zoom, so "Fetch map data" always uses whatever
+ * the map is currently showing. Ways to move the view:
  *  - click anywhere on the map
- *  - pan/zoom, then click "Use this view"
+ *  - pan/zoom freely
  *  - `flyTo(lon, lat)`, called externally (e.g. by <location-search>)
  */
 export class OsmMap extends HTMLElement {
@@ -23,17 +25,11 @@ export class OsmMap extends HTMLElement {
 
   /** @type {HTMLDivElement | null} */
   container = null;
-  button = null;
 
   connectedCallback() {
     this.container = document.createElement('div');
     this.container.className = 'map-container';
     this.appendChild(this.container);
-
-    this.button = document.createElement('button');
-    this.button.className = 'map-set-view-button';
-    this.button.innerText = 'Use this view';
-    this.appendChild(this.button);
 
     // Force use of WGS84 (lon/lat) coordinates everywhere in OL.
     useGeographic();
@@ -49,9 +45,11 @@ export class OsmMap extends HTMLElement {
       layers: [new TileLayer({ source: new OSM() })],
     });
 
-    this.button.addEventListener('click', () => this.#commit());
-
     this.map.on('singleclick', (ev) => this.#commit(ev.coordinate));
+
+    // Keep state's center/zoom/bbox in sync with the view on every pan/zoom,
+    // so a fetch always reflects whatever the map is currently showing.
+    this.map.on('moveend', () => this.#commit());
 
     // The map container can start out with zero size (e.g. while nested in a
     // collapsed popover panel) or be resized later when it's revealed. Keep

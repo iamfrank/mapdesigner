@@ -11,9 +11,3 @@ map-osm .map-container {
   height: 100%;
 }
 
-map-osm .map-set-view-button {
-  position: absolute;
-  z-index: 10;
-  bottom: 1rem;
-  right: 1rem;
-}

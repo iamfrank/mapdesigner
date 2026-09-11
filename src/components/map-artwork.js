@@ -1,5 +1,5 @@
 import { computeTransform } from "../utils/projection.js";
-import { clearCanvas, renderLayer } from "../utils/render.js";
+import { clearCanvas, renderLayer, renderSea } from "../utils/render.js";
 import state from '../utils/state.js'
 
 export class ArtworkMap extends HTMLElement {
@@ -37,6 +37,12 @@ export class ArtworkMap extends HTMLElement {
     if (!osmData) return;
     const transform = computeTransform(bbox, this.canvasEl.width, this.canvasEl.height);
     clearCanvas(this.ctx);
+
+    const waterStyle = styles.find((s) => s.id === 'water');
+    if (waterStyle?.visible) {
+      renderSea(this.ctx, osmData.coastlines, transform, waterStyle.color);
+    }
+
     styles.forEach((style) => {
       if (style.visible) {
         renderLayer(this.ctx, osmData[style.id], transform, style);

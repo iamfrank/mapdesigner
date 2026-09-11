@@ -1,5 +1,5 @@
 import { computeTransform } from './projection.js';
-import { clearCanvas, renderLayer, drawTitleBlock } from './render.js';
+import { clearCanvas, renderLayer, renderSea, drawTitleBlock } from './render.js';
 import { getPrintPx } from './state.js';
 import state from './state.js'
 
@@ -26,6 +26,11 @@ function renderPrintCanvas(osmData, bbox) {
   clearCanvas(ctx);
 
   const styles = state.get('styles');
+  const waterStyle = styles.find((s) => s.id === 'water');
+  if (waterStyle?.visible) {
+    renderSea(ctx, osmData.coastlines, printTransform, waterStyle.color);
+  }
+
   for (const style of styles) {
     if (!style.visible) continue;
     renderLayer(ctx, osmData[style.id], printTransform, style);

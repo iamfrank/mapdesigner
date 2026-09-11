@@ -30,9 +30,8 @@ const DEFAULT_DPI = 300;
  */
 const state = createStore({
   // Poster centre + geographic extent. Both are set together whenever the
-  // user commits a location — by clicking the nav map, panning then clicking
-  // "Use this view", or searching — so they're always in sync with what's
-  // fetched and rendered.
+  // nav map's view changes — by clicking, panning/zooming, or searching — so
+  // they're always in sync with what's fetched and rendered.
   center: DEFAULT_CENTER,
   zoom: DEFAULT_ZOOM,
   bbox: DEFAULT_BBOX,
@@ -56,7 +55,8 @@ const state = createStore({
     { id: "buildings", label: "Buildings", color: "#d8d3c9", stroke: 1, mode: "fill", visible: true },
     { id: "coastlines", label: "Coastlines", color: "#0000aa", stroke: 1, mode: "stroke", visible: true },
     { id: "railways", label: "Railways", color: "#555555", stroke: 1, mode: "stroke", visible: true },
-    { id: "streets", label: "Streets", color: "#aa0000", stroke: 1, mode: "stroke", visible: true },
+    { id: "streets", label: "Streets", color: "#888888", stroke: 1, mode: "stroke", visible: true },
+    { id: "paths", label: "Foot & cycle paths", color: "#c9a876", stroke: 1, mode: "stroke", visible: true },
   ],
   statusText: "",
 });
