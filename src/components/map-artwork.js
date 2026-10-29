@@ -24,9 +24,9 @@ const SIMPLIFY_DEVICE_PX = 1
  * The single, zoomable poster view.
  *
  * The canvas is sized to the *viewport* (never to the print size), and the
- * poster is drawn into it in print space under a camera transform — so what
- * you see is a window onto exactly what gets exported, and per-frame cost is
- * independent of paper size/DPI.
+ * poster is drawn into it in print space under a camera transform. The terrain
+ * overlay is preview-only; the poster itself shares the export renderer.
+ * Per-frame cost is independent of paper size/DPI.
  *
  * Interaction: wheel/pinch = zoom at cursor, drag = pan, double-click = toggle
  * fit / 100 %. During a gesture the last bitmap is moved with a CSS transform
@@ -51,11 +51,36 @@ export class ArtworkMap extends HTMLElement {
   #last = null
   #resizeObserver
   #unsubscribers = []
+  #terrainWorker = null
+  #terrainTimer = 0
+  #terrainRequest = 0
+  #terrainKey = null
+  #contours = null
+  #terrainToggleEl
+  #terrainIntervalEl
+  #terrainStatusEl
+  #terrainRetryEl
 
   connectedCallback() {
     this.innerHTML = `
       <canvas id="canvas-overview"></canvas>
-      <div class="zoom-controls">
+      <div class="terrain-controls map-controls">
+        <label><input type="checkbox" name="contours" checked> Contour lines</label>
+        <label>Interval
+          <select aria-label="Contour interval">
+            <option value="0">Auto</option>
+            <option value="10">10 m</option>
+            <option value="20">20 m</option>
+            <option value="50">50 m</option>
+            <option value="100">100 m</option>
+          </select>
+        </label>
+        <span class="terrain-status" role="status" aria-live="polite"></span>
+        <button type="button" data-act="retry-terrain" hidden>Retry contours</button>
+        <small>Preview only · not included in exports</small>
+        <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener noreferrer">Elevation: Mapzen terrain / sources</a>
+      </div>
+      <div class="zoom-controls map-controls">
         <button type="button" data-act="fit" title="Fit whole poster">Fit</button>
         <button type="button" data-act="actual" title="True print scale (1 print pixel = 1 screen pixel)">100%</button>
         <span class="zoom-readout"></span>
@@ -64,6 +89,16 @@ export class ArtworkMap extends HTMLElement {
     this.canvasEl = this.querySelector('canvas')
     this.ctx = this.canvasEl.getContext('2d')
     this.#readoutEl = this.querySelector('.zoom-readout')
+    this.#terrainToggleEl = this.querySelector('[name="contours"]')
+    this.#terrainIntervalEl = this.querySelector('[aria-label="Contour interval"]')
+    this.#terrainStatusEl = this.querySelector('.terrain-status')
+    this.#terrainRetryEl = this.querySelector('[data-act="retry-terrain"]')
+    this.#terrainToggleEl.addEventListener('change', () => this.#queueContours())
+    this.#terrainIntervalEl.addEventListener('change', () => this.#queueContours())
+    this.#terrainRetryEl.addEventListener('click', () => {
+      this.#terrainKey = null
+      this.#queueContours()
+    })
 
     this.querySelector('[data-act="fit"]').addEventListener('click', () => this.#fit())
     this.querySelector('[data-act="actual"]').addEventListener('click', () => this.#actualSize())
@@ -83,10 +118,12 @@ export class ArtworkMap extends HTMLElement {
       // Page shape changed: units/aspect differ, so the old camera is meaningless.
       ...['paperSizeId', 'customWidthMM', 'customHeightMM', 'dpi']
         .map((prop) => state.subscribe(prop, repage)),
+      state.subscribe('bbox', () => this.#queueContours()),
     )
 
     this.#resizeObserver = new ResizeObserver(() => this.#onResize())
     this.#resizeObserver.observe(this)
+    this.#queueContours()
   }
 
   disconnectedCallback() {
@@ -97,6 +134,69 @@ export class ArtworkMap extends HTMLElement {
     clearTimeout(this.#timer)
     this.#rafId = 0
     this.#timer = 0
+    clearTimeout(this.#terrainTimer)
+    this.#terrainWorker?.terminate()
+    this.#terrainWorker = null
+    this.#terrainKey = null
+    this.#contours = null
+    this.#terrainRequest++
+  }
+
+  // ── Preview-only terrain ──────────────────────────────────────────────
+
+  #terrainError(message) {
+    this.#terrainStatusEl.textContent = `Contours unavailable: ${message}`
+    this.#terrainRetryEl.hidden = false
+    this.#terrainKey = null
+  }
+
+  #queueContours() {
+    const enabled = this.#terrainToggleEl.checked
+    const bbox = state.get('bbox')
+    const interval = Number(this.#terrainIntervalEl.value)
+    const key = enabled && bbox ? `${bbox.map((n) => n.toFixed(6)).join(',')}:${interval}` : null
+    this.#terrainIntervalEl.disabled = !enabled
+    if (key && key === this.#terrainKey) return
+    this.#terrainKey = key
+    const id = ++this.#terrainRequest
+    clearTimeout(this.#terrainTimer)
+    this.#terrainWorker?.postMessage({ id, cancel: true })
+    this.#contours = null // Never show terrain from a previous geographic area.
+    this.#terrainRetryEl.hidden = true
+    this.#terrainStatusEl.textContent = enabled ? 'Loading terrain…' : 'Contours off'
+    this.#scheduleRaster()
+    if (!key) return
+
+    // Navigation updates can arrive in quick succession. Only fetch the settled area.
+    this.#terrainTimer = setTimeout(() => {
+      try {
+        if (!this.#terrainWorker) {
+          const worker = new Worker(new URL('../utils/terrain-worker.js', import.meta.url), { type: 'module' })
+          this.#terrainWorker = worker
+          worker.onmessage = ({ data }) => {
+            if (data.id !== this.#terrainRequest) return
+            if (data.error) { this.#terrainError(data.error); return }
+            this.#contours = data
+            const count = data.minor.length + data.major.length
+            this.#terrainStatusEl.textContent = count
+              ? `${data.interval} m contours · bold every ${data.interval * 5} m`
+              : `No contours at ${data.interval} m in this area`
+            this.#scheduleRaster()
+          }
+          worker.onerror = () => {
+            if (this.#terrainWorker !== worker) return
+            worker.terminate()
+            this.#terrainWorker = null
+            if (this.#terrainToggleEl.checked) {
+              this.#terrainError('Terrain processing failed. Try again or use a newer browser.')
+            }
+          }
+        }
+        this.#terrainWorker.postMessage({ id, bbox, interval })
+      } catch (error) {
+        this.#terrainError(error.message)
+      }
+    }, 300)
   }
 
   // ── Sizing ────────────────────────────────────────────────────────────
@@ -147,7 +247,7 @@ export class ArtworkMap extends HTMLElement {
   }
 
   #onDblClick = (e) => {
-    if (e.target.closest('.zoom-controls')) return
+    if (e.target.closest('.map-controls')) return
     const { w, h } = this.#view
     const { w: pw, h: ph } = getPrintPx()
     if (this.#cam.k > fitScale(pw, ph, w, h) * 1.001) return this.#fit()
@@ -184,6 +284,7 @@ export class ArtworkMap extends HTMLElement {
   // ── Input ─────────────────────────────────────────────────────────────
 
   #onWheel = (e) => {
+    if (e.target.closest('.map-controls')) return
     e.preventDefault()
     if (!this.#view.w) return
     const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
@@ -206,7 +307,7 @@ export class ArtworkMap extends HTMLElement {
   }
 
   #onPointerDown = (e) => {
-    if (e.target.closest('.zoom-controls')) return
+    if (e.target.closest('.map-controls')) return
     this.setPointerCapture(e.pointerId)
     this.#pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
     this.#last = this.#gestureState()
@@ -280,12 +381,25 @@ export class ArtworkMap extends HTMLElement {
     ctx.setTransform(kd, 0, 0, kd, (vw / 2 - cx * k) * dpr, (vh / 2 - cy * k) * dpr)
 
     const osmData = state.get('osmData')
-    const styles = state.get('styles')
+    let previewData = osmData
+    let styles = state.get('styles')
+    if (this.#contours) {
+      // Only this view receives these layers. Shared state and exports stay untouched.
+      previewData = { ...osmData, contoursMinor: this.#contours.minor, contoursMajor: this.#contours.major }
+      const firstStroke = styles.findIndex((style) => style.mode !== 'fill')
+      const index = firstStroke < 0 ? styles.length : firstStroke
+      styles = [
+        ...styles.slice(0, index),
+        { id: 'contoursMinor', visible: true, mode: 'stroke', color: 'rgba(130,92,55,0.5)', stroke: 0.65 / kd },
+        { id: 'contoursMajor', visible: true, mode: 'stroke', color: 'rgba(115,76,40,0.8)', stroke: 1.1 / kd },
+        ...styles.slice(index),
+      ]
+    }
     const transform = computeTransform(state.get('bbox'), pw, ph)
     const waterVisible = styles.find((s) => s.id === 'water')?.visible
 
     drawPoster(ctx, {
-      osmData,
+      osmData: previewData,
       styles,
       transform,
       width: pw,

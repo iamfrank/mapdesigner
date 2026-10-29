@@ -18,7 +18,7 @@ customElements.define("fetch-data-control", FetchDataControl);
 customElements.define("paper-size-control", PaperSizeControl);
 customElements.define("poster-text-control", PosterTextControl);
 
-// Note: nothing here fetches automatically. Panning/clicking the nav map or
-// using <location-search> only updates `center`/`bbox`; loading OSM data
-// from Overpass only ever happens when the user explicitly clicks "Fetch map
-// data" (<fetch-data-control>), to stay well clear of Overpass's rate limits.
+// OSM data is never fetched automatically. Panning/clicking the nav map or
+// using <location-search> updates `center`/`bbox`; Overpass is only called
+// when the user clicks "Fetch map data", to respect its rate limits.
+// The preview-only terrain overlay independently loads public Mapzen tiles.

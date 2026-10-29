@@ -63,3 +63,37 @@ export function computeTransform(bboxLonLat, canvasW, canvasH) {
     scale,
   };
 }
+
+/**
+ * Convert Web Mercator metres back to geographic coordinates.
+ * @returns {[number, number]}  [lon, lat] in degrees
+ */
+export function fromMercator(mx, my) {
+  const lon = (mx * 180) / (Math.PI * R);
+  const lat = ((2 * Math.atan(Math.exp(my / R)) - Math.PI / 2) * 180) / Math.PI;
+  return [lon, lat];
+}
+
+/**
+ * Largest box of the given aspect ratio that fits inside a geographic bbox,
+ * sharing its centre. Works in Mercator space, which is what the poster is
+ * projected with, so the result maps onto the poster with no letterboxing.
+ *
+ * @param {[number,number,number,number]} bboxLonLat  [minLat, minLon, maxLat, maxLon]
+ * @param {number} aspect  width / height of the target (e.g. paper)
+ * @returns {[number,number,number,number]}  [minLat, minLon, maxLat, maxLon]
+ */
+export function fitBboxToAspect(bboxLonLat, aspect) {
+  const [minLat, minLon, maxLat, maxLon] = bboxLonLat;
+  const [x0, y0] = toMercator(minLon, minLat);
+  const [x1, y1] = toMercator(maxLon, maxLat);
+  let w = x1 - x0;
+  let h = y1 - y0;
+  if (w / h > aspect) w = h * aspect;
+  else h = w / aspect;
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const [lon0, lat0] = fromMercator(cx - w / 2, cy - h / 2);
+  const [lon1, lat1] = fromMercator(cx + w / 2, cy + h / 2);
+  return [lat0, lon0, lat1, lon1];
+}
