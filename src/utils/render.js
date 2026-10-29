@@ -1,13 +1,5 @@
 import { toMercator, toCanvas } from './projection.js';
-
-/**
- * Clear a canvas and fill it with white.
- * @param {CanvasRenderingContext2D} ctx
- */
-export function clearCanvas(ctx) {
-  ctx.fillStyle = '#ffffff';
-  ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
-}
+import { renderLayerGeometry } from './geometry.js';
 
 /**
  * Chain coastline ways end-to-end into longer polylines/rings by matching
@@ -198,16 +190,13 @@ export function computeSeaPolygons(coastlineWays, transform, width, height) {
 }
 
 /**
- * Fill in the sea using the coastline data, so open water renders as a solid
- * colour rather than being left blank. See {@link computeSeaPolygons}.
+ * Fill precomputed sea polygons (see {@link computeSeaPolygons}).
  * @param {CanvasRenderingContext2D} ctx
- * @param {[number,number][][]} coastlineWays
- * @param {{ originX: number, originY: number, scale: number }} transform
- * @param {string} seaColor   Fill colour for open water
+ * @param {{ sea: [number,number][][], islands: [number,number][][] }} polys
+ * @param {string} seaColor
  * @param {string} [landColor='#ffffff']  Fill colour used to cut out islands
  */
-export function renderSea(ctx, coastlineWays, transform, seaColor, landColor = '#ffffff') {
-  const { sea, islands } = computeSeaPolygons(coastlineWays, transform, ctx.canvas.width, ctx.canvas.height);
+export function fillSeaPolygons(ctx, { sea, islands }, seaColor, landColor = '#ffffff') {
   if (sea.length === 0) return;
 
   const fillPolygon = (points) => {
@@ -229,87 +218,20 @@ export function renderSea(ctx, coastlineWays, transform, seaColor, landColor = '
 }
 
 /**
- * Render an array of polylines (ways) onto a canvas context as strokes.
- *
- * Each way is an array of [lon, lat] coordinate pairs.
- * All ways are drawn in a single path for performance.
- *
+ * Fill in the sea using the coastline data, so open water renders as a solid
+ * colour rather than being left blank. See {@link computeSeaPolygons}.
  * @param {CanvasRenderingContext2D} ctx
- * @param {[number,number][][]} ways         Array of polylines
+ * @param {[number,number][][]} coastlineWays
  * @param {{ originX: number, originY: number, scale: number }} transform
- * @param {string}  strokeStyle             CSS colour string
- * @param {number}  lineWidth               Stroke width in canvas pixels
+ * @param {string} seaColor   Fill colour for open water
+ * @param {string} [landColor='#ffffff']  Fill colour used to cut out islands
+ * @param {{ width: number, height: number }} [size]  Box the sea is closed
+ *   against; defaults to the canvas size.
  */
-export function renderWays(ctx, ways, transform, strokeStyle, lineWidth) {
-  if (!ways || ways.length === 0) return;
-
-  ctx.strokeStyle = strokeStyle;
-  ctx.lineWidth = lineWidth;
-  ctx.lineJoin = 'round';
-  ctx.lineCap = 'round';
-
-  ctx.beginPath();
-
-  for (const way of ways) {
-    if (way.length < 2) continue;
-
-    const [x0, y0] = toCanvas(...toMercator(way[0][0], way[0][1]), transform);
-    ctx.moveTo(x0, y0);
-
-    for (let i = 1; i < way.length; i++) {
-      const [x, y] = toCanvas(...toMercator(way[i][0], way[i][1]), transform);
-      ctx.lineTo(x, y);
-    }
-  }
-
-  ctx.stroke();
-}
-
-/**
- * Render an array of closed ways (polygon-like areas, e.g. water, parks,
- * buildings) onto a canvas context as filled shapes. Each ring is filled
- * independently (no hole-cutting), which is a reasonable approximation for
- * simple OSM area ways.
- *
- * @param {CanvasRenderingContext2D} ctx
- * @param {[number,number][][]} ways   Array of polygon rings
- * @param {{ originX: number, originY: number, scale: number }} transform
- * @param {string}  fillStyle          CSS colour string
- */
-export function renderFilledWays(ctx, ways, transform, fillStyle) {
-  if (!ways || ways.length === 0) return;
-
-  ctx.fillStyle = fillStyle;
-
-  for (const way of ways) {
-    if (way.length < 3) continue;
-
-    ctx.beginPath();
-    const [x0, y0] = toCanvas(...toMercator(way[0][0], way[0][1]), transform);
-    ctx.moveTo(x0, y0);
-
-    for (let i = 1; i < way.length; i++) {
-      const [x, y] = toCanvas(...toMercator(way[i][0], way[i][1]), transform);
-      ctx.lineTo(x, y);
-    }
-    ctx.closePath();
-    ctx.fill();
-  }
-}
-
-/**
- * Render a layer using the mode declared on its style ('fill' or 'stroke').
- * @param {CanvasRenderingContext2D} ctx
- * @param {[number,number][][]} ways
- * @param {{ originX: number, originY: number, scale: number }} transform
- * @param {{ color: string, stroke: number, mode?: 'fill'|'stroke' }} style
- */
-export function renderLayer(ctx, ways, transform, style) {
-  if (style.mode === 'fill') {
-    renderFilledWays(ctx, ways, transform, style.color);
-  } else {
-    renderWays(ctx, ways, transform, style.color, style.stroke);
-  }
+export function renderSea(ctx, coastlineWays, transform, seaColor, landColor = '#ffffff', size) {
+  const width = size?.width ?? ctx.canvas.width;
+  const height = size?.height ?? ctx.canvas.height;
+  fillSeaPolygons(ctx, computeSeaPolygons(coastlineWays, transform, width, height), seaColor, landColor);
 }
 
 /**
@@ -349,5 +271,51 @@ export function drawTitleBlock(ctx, { title, subtitle, width, height }) {
     ctx.fillText(title, width / 2, y);
   }
 
+  ctx.restore();
+}
+
+/**
+ * Draw the whole poster (page, layers, title block) in *print space*: the
+ * caller sets the context transform, and everything here is expressed in
+ * print pixels over [0,width] × [0,height]. The same function backs the
+ * on-screen view (with a camera transform) and the export (identity), so
+ * both always look the same.
+ *
+ * @param {CanvasRenderingContext2D} ctx
+ * @param {object} opts
+ * @param {object|null} opts.osmData
+ * @param {object[]} opts.styles
+ * @param {{ originX: number, originY: number, scale: number }} opts.transform  mercator → print px
+ * @param {number} opts.width    Page width in print px
+ * @param {number} opts.height   Page height in print px
+ * @param {{ sea: any[], islands: any[] }} [opts.sea]  Precomputed sea polygons (print space)
+ * @param {{x0:number,y0:number,x1:number,y1:number}|null} [opts.view]  Visible rect in print px for culling (null = draw everything)
+ * @param {number} [opts.tol=0]  Vertex-simplification tolerance in print px (0 = exact)
+ * @param {number} [opts.minStroke=0]  Minimum stroke width in print px (keeps hairlines visible when zoomed out)
+ * @param {{ title: string, subtitle: string }|null} [opts.titleBlock]
+ */
+export function drawPoster(ctx, { osmData, styles, transform, width, height, sea, view = null, tol = 0, minStroke = 0, titleBlock }) {
+  ctx.save();
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, width, height);
+  ctx.beginPath();
+  ctx.rect(0, 0, width, height);
+  ctx.clip();
+
+  if (osmData) {
+    const waterStyle = styles.find((s) => s.id === 'water');
+    if (waterStyle?.visible) {
+      if (sea) fillSeaPolygons(ctx, sea, waterStyle.color);
+      else renderSea(ctx, osmData.coastlines, transform, waterStyle.color, '#ffffff', { width, height });
+    }
+
+    for (const style of styles) {
+      if (!style.visible) continue;
+      const s = style.mode === 'fill' || style.stroke >= minStroke ? style : { ...style, stroke: minStroke };
+      renderLayerGeometry(ctx, osmData[style.id], transform, s, { view, tol });
+    }
+  }
+
+  if (titleBlock) drawTitleBlock(ctx, { ...titleBlock, width, height });
   ctx.restore();
 }

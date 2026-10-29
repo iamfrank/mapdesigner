@@ -1,7 +1,6 @@
 import { LayerControlList } from "./components/layer-control-list.js";
 import { OsmMap } from "./components/map-osm.js";
 import { ArtworkMap } from "./components/map-artwork.js";
-import { ArtworkDetailMap } from "./components/map-artwork-detail.js";
 import { StatusNotify } from "./components/status-notify.js";
 import { ExportPDF } from "./components/export-pdf.js";
 import { LocationSearch } from "./components/location-search.js";
@@ -11,7 +10,6 @@ import { PosterTextControl } from "./components/poster-text-control.js";
 
 customElements.define("layer-control-list", LayerControlList);
 customElements.define("map-artwork", ArtworkMap);
-customElements.define("map-artwork-detail", ArtworkDetailMap);
 customElements.define("map-osm", OsmMap);
 customElements.define("status-notify", StatusNotify);
 customElements.define("export-pdf", ExportPDF);

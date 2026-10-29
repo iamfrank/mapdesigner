@@ -1,6 +1,6 @@
 import { computeTransform } from './projection.js';
-import { clearCanvas, renderLayer, renderSea, drawTitleBlock } from './render.js';
-import { getPrintPx } from './state.js';
+import { drawPoster } from './render.js';
+import { getPrintPx, getTitleBlock } from './state.js';
 import state from './state.js'
 
 /**
@@ -21,36 +21,16 @@ function renderPrintCanvas(osmData, bbox) {
   const ctx = offscreen.getContext('2d');
   if (!ctx) throw new Error('Could not obtain 2D context for offscreen canvas.');
 
-  const printTransform = computeTransform(bbox, printW, printH);
-
-  clearCanvas(ctx);
-
-  const styles = state.get('styles');
-  const waterStyle = styles.find((s) => s.id === 'water');
-  if (waterStyle?.visible) {
-    renderSea(ctx, osmData.coastlines, printTransform, waterStyle.color);
-  }
-
-  for (const style of styles) {
-    if (!style.visible) continue;
-    renderLayer(ctx, osmData[style.id], printTransform, style);
-  }
-
-  if (state.get('showTitleBlock')) {
-    const title = state.get('title');
-    const subtitle = state.get('autoSubtitle')
-      ? formatCoords(state.get('center'))
-      : state.get('subtitle');
-    drawTitleBlock(ctx, { title, subtitle, width: printW, height: printH });
-  }
+  drawPoster(ctx, {
+    osmData,
+    styles: state.get('styles'),
+    transform: computeTransform(bbox, printW, printH),
+    width: printW,
+    height: printH,
+    titleBlock: getTitleBlock(),
+  });
 
   return offscreen;
-}
-
-function formatCoords([lon, lat]) {
-  const latLabel = `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? 'N' : 'S'}`;
-  const lonLabel = `${Math.abs(lon).toFixed(4)}°${lon >= 0 ? 'E' : 'W'}`;
-  return `${latLabel} / ${lonLabel}`;
 }
 
 function slugFilename(ext) {

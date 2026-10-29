@@ -63,24 +63,3 @@ export function computeTransform(bboxLonLat, canvasW, canvasH) {
     scale,
   };
 }
-
-/**
- * Compute a ViewTransform for the detail canvas: same scale as the print canvas
- * but with its origin offset so that a chosen geographic centre aligns with the
- * centre of the canvas.
- *
- * @param {number} centerLon
- * @param {number} centerLat
- * @param {number} printScale   pixels-per-metre from the full-print transform
- * @param {number} canvasW      detail canvas width in pixels
- * @param {number} canvasH      detail canvas height in pixels
- * @returns {{ originX: number, originY: number, scale: number }}
- */
-export function computeDetailTransform(centerLon, centerLat, printScale, canvasW, canvasH) {
-  const [cx, cy] = toMercator(centerLon, centerLat);
-  return {
-    originX: cx - canvasW / 2 / printScale,
-    originY: cy + canvasH / 2 / printScale,
-    scale: printScale,
-  };
-}

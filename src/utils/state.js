@@ -1,10 +1,6 @@
 import { createStore } from "./store.js";
 import { computePrintPx } from "./paper.js";
 
-/** Detail canvas — fixed pixel size, always 1 : √2 portrait ratio */
-export const DETAIL_W = 300;
-export const DETAIL_H = 424;
-
 export const OVERPASS_URL = "https://overpass-api.de/api/interpreter";
 
 const DEFAULT_CENTER = [12, 55.5]; // [lon, lat]
@@ -69,6 +65,21 @@ export function getPrintPx() {
     customHeightMM: state.get("customHeightMM"),
     dpi: state.get("dpi"),
   });
+}
+
+/** Title/subtitle to draw on the poster, or null when the block is hidden. */
+export function getTitleBlock() {
+  if (!state.get("showTitleBlock")) return null;
+  const subtitle = state.get("autoSubtitle")
+    ? formatCoords(state.get("center"))
+    : state.get("subtitle");
+  return { title: state.get("title"), subtitle };
+}
+
+function formatCoords([lon, lat]) {
+  const latLabel = `${Math.abs(lat).toFixed(4)}°${lat >= 0 ? "N" : "S"}`;
+  const lonLabel = `${Math.abs(lon).toFixed(4)}°${lon >= 0 ? "E" : "W"}`;
+  return `${latLabel} / ${lonLabel}`;
 }
 
 export default state;

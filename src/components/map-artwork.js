@@ -1,68 +1,311 @@
-import { computeTransform } from "../utils/projection.js";
-import { clearCanvas, renderLayer, renderSea } from "../utils/render.js";
-import state from '../utils/state.js'
+import state, { getPrintPx, getTitleBlock } from '../utils/state.js'
+import { computeTransform } from '../utils/projection.js'
+import { computeSeaPolygons, drawPoster } from '../utils/render.js'
+import {
+  MAX_ZOOM,
+  fitCamera,
+  fitScale,
+  clampCamera,
+  zoomAt,
+  cssTransformBetween,
+} from '../utils/camera.js'
 
+/** Re-raster every frame while interaction is cheaper than this (ms). */
+const FAST_RENDER_MS = 24
+/** Otherwise wait this long after the last gesture event (ms). */
+const SETTLE_MS = 150
+const MAX_DPR = 2
+/** Lines never get thinner than this on screen (device px). */
+const MIN_STROKE_DEVICE_PX = 0.5
+/** Vertices closer than this (device px) to the previous one are dropped. */
+const SIMPLIFY_DEVICE_PX = 1
+
+/**
+ * The single, zoomable poster view.
+ *
+ * The canvas is sized to the *viewport* (never to the print size), and the
+ * poster is drawn into it in print space under a camera transform — so what
+ * you see is a window onto exactly what gets exported, and per-frame cost is
+ * independent of paper size/DPI.
+ *
+ * Interaction: wheel/pinch = zoom at cursor, drag = pan, double-click = toggle
+ * fit / 100 %. During a gesture the last bitmap is moved with a CSS transform
+ * (instant); the real re-raster happens every frame while it's cheap, or once
+ * the gesture settles when it's not.
+ */
 export class ArtworkMap extends HTMLElement {
   canvasEl
   ctx
+  #readoutEl
+  #cam = { k: 1, cx: 0, cy: 0 }
+  /** Camera the canvas bitmap was last rasterised with. */
+  #rendered = null
+  #view = { w: 0, h: 0, dpr: 1 }
+  #fitMode = true
+  #rafId = 0
+  #timer = 0
+  #lastRenderMs = 0
+  /** Sea polygons depend only on data + page, not on the camera → cache. */
+  #seaCache = null
+  #pointers = new Map()
+  #last = null
+  #resizeObserver
   #unsubscribers = []
 
-  constructor() {
-    super()
-  }
-
   connectedCallback() {
-    this.render()
-    const rerender = () => this.renderCanvas(state.get('styles'), state.get('osmData'), state.get('bbox'))
+    this.innerHTML = `
+      <canvas id="canvas-overview"></canvas>
+      <div class="zoom-controls">
+        <button type="button" data-act="fit" title="Fit whole poster">Fit</button>
+        <button type="button" data-act="actual" title="True print scale (1 print pixel = 1 screen pixel)">100%</button>
+        <span class="zoom-readout"></span>
+      </div>
+    `
+    this.canvasEl = this.querySelector('canvas')
+    this.ctx = this.canvasEl.getContext('2d')
+    this.#readoutEl = this.querySelector('.zoom-readout')
+
+    this.querySelector('[data-act="fit"]').addEventListener('click', () => this.#fit())
+    this.querySelector('[data-act="actual"]').addEventListener('click', () => this.#actualSize())
+
+    this.addEventListener('wheel', this.#onWheel, { passive: false })
+    this.addEventListener('pointerdown', this.#onPointerDown)
+    this.addEventListener('pointermove', this.#onPointerMove)
+    this.addEventListener('pointerup', this.#onPointerUp)
+    this.addEventListener('pointercancel', this.#onPointerUp)
+    this.addEventListener('dblclick', this.#onDblClick)
+
+    const redraw = () => this.#scheduleRaster()
+    const repage = () => { this.#fit(); }
     this.#unsubscribers.push(
-      state.subscribe('osmData', rerender),
-      state.subscribe('styles', rerender),
-      state.subscribe('bbox', rerender),
+      ...['osmData', 'styles', 'bbox', 'center', 'title', 'subtitle', 'autoSubtitle', 'showTitleBlock']
+        .map((prop) => state.subscribe(prop, redraw)),
+      // Page shape changed: units/aspect differ, so the old camera is meaningless.
+      ...['paperSizeId', 'customWidthMM', 'customHeightMM', 'dpi']
+        .map((prop) => state.subscribe(prop, repage)),
     )
+
+    this.#resizeObserver = new ResizeObserver(() => this.#onResize())
+    this.#resizeObserver.observe(this)
   }
 
   disconnectedCallback() {
     this.#unsubscribers.forEach((unsubscribe) => unsubscribe())
     this.#unsubscribers = []
+    this.#resizeObserver?.disconnect()
+    cancelAnimationFrame(this.#rafId)
+    clearTimeout(this.#timer)
+    this.#rafId = 0
+    this.#timer = 0
   }
 
-  render() {
-    this.innerHTML = '<canvas id="canvas-overview"></canvas>'
-    this.canvasEl = this.querySelector('canvas')
-    this.sizeOverviewCanvas(this.canvasEl)
-    this.ctx = this.canvasEl.getContext("2d");
+  // ── Sizing ────────────────────────────────────────────────────────────
+
+  #onResize() {
+    const rect = this.getBoundingClientRect()
+    const w = Math.floor(rect.width)
+    const h = Math.floor(rect.height)
+    if (w === 0 || h === 0) return
+    const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR)
+    if (w === this.#view.w && h === this.#view.h && dpr === this.#view.dpr) return
+
+    this.#view = { w, h, dpr }
+    // Assigning width/height clears the canvas, so re-raster synchronously.
+    this.canvasEl.width = Math.round(w * dpr)
+    this.canvasEl.height = Math.round(h * dpr)
+    this.canvasEl.style.width = `${w}px`
+    this.canvasEl.style.height = `${h}px`
+
+    if (this.#fitMode) this.#cam = this.#fitCam()
+    else this.#cam = this.#clamp(this.#cam)
+    this.#raster()
   }
 
-  renderCanvas(styles, osmData, bbox) {
-    if (!osmData) return;
-    const transform = computeTransform(bbox, this.canvasEl.width, this.canvasEl.height);
-    clearCanvas(this.ctx);
+  #fitCam() {
+    const { w: pw, h: ph } = getPrintPx()
+    return fitCamera(pw, ph, this.#view.w, this.#view.h)
+  }
 
-    const waterStyle = styles.find((s) => s.id === 'water');
-    if (waterStyle?.visible) {
-      renderSea(this.ctx, osmData.coastlines, transform, waterStyle.color);
+  #clamp(cam) {
+    const { w: pw, h: ph } = getPrintPx()
+    return clampCamera(cam, pw, ph, this.#view.w, this.#view.h)
+  }
+
+  // ── Camera ────────────────────────────────────────────────────────────
+
+  #fit() {
+    this.#fitMode = true
+    if (!this.#view.w) return
+    this.#cam = this.#fitCam()
+    // Page shape may have changed, so don't reuse the old bitmap.
+    this.#scheduleRaster()
+  }
+
+  #actualSize() {
+    const { w, h } = this.#view
+    this.#setCamera(zoomAt(this.#cam, w / 2, h / 2, 1, w, h))
+  }
+
+  #onDblClick = (e) => {
+    if (e.target.closest('.zoom-controls')) return
+    const { w, h } = this.#view
+    const { w: pw, h: ph } = getPrintPx()
+    if (this.#cam.k > fitScale(pw, ph, w, h) * 1.001) return this.#fit()
+    const r = this.getBoundingClientRect()
+    this.#setCamera(zoomAt(this.#cam, e.clientX - r.left, e.clientY - r.top, 1, w, h))
+  }
+
+  /** Apply a new camera from user interaction: instant CSS feedback + deferred raster. */
+  #setCamera(cam) {
+    if (!this.#view.w) return
+    const { w: pw, h: ph } = getPrintPx()
+    this.#cam = this.#clamp(cam)
+    this.#fitMode = this.#cam.k <= fitScale(pw, ph, this.#view.w, this.#view.h) * 1.0001
+
+    if (this.#rendered) {
+      this.canvasEl.style.transform = cssTransformBetween(this.#rendered, this.#cam, this.#view.w, this.#view.h)
     }
+    this.#updateReadout()
 
-    styles.forEach((style) => {
-      if (style.visible) {
-        renderLayer(this.ctx, osmData[style.id], transform, style);
-      }
-    });
+    if (this.#lastRenderMs < FAST_RENDER_MS) {
+      this.#scheduleRaster()
+    } else {
+      cancelAnimationFrame(this.#rafId)
+      this.#rafId = 0
+      clearTimeout(this.#timer)
+      this.#timer = setTimeout(() => this.#raster(), SETTLE_MS)
+    }
   }
 
-  /**
-   * Compute and apply the overview canvas dimensions based on the current
-   * viewport, respecting the A0 portrait aspect ratio (1 : √2).
-   */
-  sizeOverviewCanvas(canvasElement) {
-    const headerH = document.querySelector("header")?.offsetHeight ?? 0;
-    const footerH = document.querySelector("footer")?.offsetHeight ?? 0;
-    // Leave 55 % of viewport width for the overview column
-    const maxW = window.innerWidth * 0.55;
-    const maxH = (window.innerHeight - headerH - footerH) * 0.92;
-    const h = Math.min(maxH, maxW * Math.SQRT2);
-    const w = h / Math.SQRT2;
-    canvasElement.width = Math.round(w);
-    canvasElement.height = Math.round(h);
+  #updateReadout() {
+    this.#readoutEl.textContent = `${Math.round(this.#cam.k * 100)}%`
+  }
+
+  // ── Input ─────────────────────────────────────────────────────────────
+
+  #onWheel = (e) => {
+    e.preventDefault()
+    if (!this.#view.w) return
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1
+    // ctrl+wheel is how trackpads report pinch; it arrives in smaller steps.
+    const speed = e.ctrlKey ? 0.01 : 0.0015
+    const factor = Math.exp(-e.deltaY * unit * speed)
+    const r = this.getBoundingClientRect()
+    const { w, h } = this.#view
+    this.#setCamera(zoomAt(this.#cam, e.clientX - r.left, e.clientY - r.top, this.#cam.k * factor, w, h))
+  }
+
+  #gestureState() {
+    const pts = [...this.#pointers.values()].slice(0, 2)
+    if (pts.length === 0) return null
+    const r = this.getBoundingClientRect()
+    const x = pts.reduce((a, p) => a + p.x, 0) / pts.length - r.left
+    const y = pts.reduce((a, p) => a + p.y, 0) / pts.length - r.top
+    const dist = pts.length === 2 ? Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) : 0
+    return { x, y, dist }
+  }
+
+  #onPointerDown = (e) => {
+    if (e.target.closest('.zoom-controls')) return
+    this.setPointerCapture(e.pointerId)
+    this.#pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    this.#last = this.#gestureState()
+    this.classList.add('panning')
+  }
+
+  #onPointerMove = (e) => {
+    if (!this.#pointers.has(e.pointerId)) return
+    this.#pointers.set(e.pointerId, { x: e.clientX, y: e.clientY })
+    const cur = this.#gestureState()
+    const last = this.#last
+    this.#last = cur
+    if (!cur || !last) return
+
+    const { w, h } = this.#view
+    let cam = { ...this.#cam, cx: this.#cam.cx - (cur.x - last.x) / this.#cam.k, cy: this.#cam.cy - (cur.y - last.y) / this.#cam.k }
+    if (cur.dist > 0 && last.dist > 0) {
+      cam = zoomAt(cam, cur.x, cur.y, cam.k * (cur.dist / last.dist), w, h)
+    }
+    this.#setCamera(cam)
+  }
+
+  #onPointerUp = (e) => {
+    this.#pointers.delete(e.pointerId)
+    this.#last = this.#gestureState()
+    if (this.#pointers.size === 0) this.classList.remove('panning')
+  }
+
+  // ── Rendering ─────────────────────────────────────────────────────────
+
+  #scheduleRaster() {
+    clearTimeout(this.#timer)
+    this.#timer = 0
+    if (this.#rafId) return
+    this.#rafId = requestAnimationFrame(() => {
+      this.#rafId = 0
+      this.#raster()
+    })
+  }
+
+  #getSea(osmData, transform, pw, ph) {
+    const c = this.#seaCache
+    if (c && c.coast === osmData.coastlines && c.transform.originX === transform.originX
+      && c.transform.originY === transform.originY && c.transform.scale === transform.scale
+      && c.pw === pw && c.ph === ph) {
+      return c.polys
+    }
+    const polys = computeSeaPolygons(osmData.coastlines, transform, pw, ph)
+    this.#seaCache = { coast: osmData.coastlines, transform, pw, ph, polys }
+    return polys
+  }
+
+  #raster() {
+    cancelAnimationFrame(this.#rafId)
+    clearTimeout(this.#timer)
+    this.#rafId = 0
+    this.#timer = 0
+
+    const { w: vw, h: vh, dpr } = this.#view
+    if (!vw) return
+    const t0 = performance.now()
+
+    const { w: pw, h: ph } = getPrintPx()
+    this.#cam = this.#fitMode ? this.#fitCam() : this.#clamp(this.#cam)
+    const { k, cx, cy } = this.#cam
+    const kd = k * dpr // device px per print px
+
+    const ctx = this.ctx
+    ctx.setTransform(1, 0, 0, 1, 0, 0)
+    ctx.clearRect(0, 0, this.canvasEl.width, this.canvasEl.height)
+    ctx.setTransform(kd, 0, 0, kd, (vw / 2 - cx * k) * dpr, (vh / 2 - cy * k) * dpr)
+
+    const osmData = state.get('osmData')
+    const styles = state.get('styles')
+    const transform = computeTransform(state.get('bbox'), pw, ph)
+    const waterVisible = styles.find((s) => s.id === 'water')?.visible
+
+    drawPoster(ctx, {
+      osmData,
+      styles,
+      transform,
+      width: pw,
+      height: ph,
+      sea: osmData && waterVisible ? this.#getSea(osmData, transform, pw, ph) : undefined,
+      view: {
+        x0: cx - vw / (2 * k),
+        y0: cy - vh / (2 * k),
+        x1: cx + vw / (2 * k),
+        y1: cy + vh / (2 * k),
+      },
+      tol: SIMPLIFY_DEVICE_PX / kd,
+      minStroke: MIN_STROKE_DEVICE_PX / kd,
+      titleBlock: getTitleBlock(),
+    })
+
+    // Bitmap now matches the camera exactly; drop the interim CSS transform.
+    this.#rendered = { ...this.#cam }
+    this.canvasEl.style.transform = ''
+    this.#updateReadout()
+    this.#lastRenderMs = performance.now() - t0
   }
 }
