@@ -1,5 +1,5 @@
 import { computeTransform } from './projection.js';
-import { drawPoster } from './render.js';
+import { drawPoster, withContours } from './render.js';
 import { getPrintPx, getTitleBlock } from './state.js';
 import state from './state.js'
 
@@ -21,12 +21,20 @@ function renderPrintCanvas(osmData, bbox) {
   const ctx = offscreen.getContext('2d');
   if (!ctx) throw new Error('Could not obtain 2D context for offscreen canvas.');
 
+  // Line widths in physical units (~0.1 mm / ~0.18 mm), so they print the same at any DPI.
+  const pxPerMM = state.get('dpi') / 25.4;
+  const layers = withContours(osmData, state.get('styles'), state.get('contours'), {
+    minor: 0.1 * pxPerMM,
+    major: 0.18 * pxPerMM,
+  });
+
   drawPoster(ctx, {
-    osmData,
-    styles: state.get('styles'),
+    osmData: layers.osmData,
+    styles: layers.styles,
     transform: computeTransform(bbox, printW, printH),
     width: printW,
     height: printH,
+    backgroundColor: state.get('backgroundStyle').color,
     titleBlock: getTitleBlock(),
   });
 

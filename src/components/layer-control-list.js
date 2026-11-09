@@ -1,7 +1,9 @@
 import state from "../utils/state.js";
 import { LayerStyleControl } from "./layer-style-control.js";
+import { BackgroundStyleControl } from "./background-style-control.js";
 
 customElements.define("layer-style-control", LayerStyleControl);
+customElements.define("background-style-control", BackgroundStyleControl);
 
 export class LayerControlList extends HTMLElement {
   constructor() {
@@ -11,6 +13,9 @@ export class LayerControlList extends HTMLElement {
   connectedCallback() {
     this.render(state.get("styles"));
     this.addEventListener('layer:change', this.updateStyles.bind(this))
+    this.addEventListener('background:change', (ev) => {
+      state.set('backgroundStyle', { ...state.get('backgroundStyle'), color: ev.detail });
+    });
   }
 
   render(styles) {
@@ -30,6 +35,7 @@ export class LayerControlList extends HTMLElement {
         </li>`,
           )
           .join("")}
+        <li><background-style-control color="${state.get('backgroundStyle').color}"></background-style-control></li>
       </ul>
     `;
   }

@@ -7,6 +7,7 @@ import { LocationSearch } from "./components/location-search.js";
 import { FetchDataControl } from "./components/fetch-data-control.js";
 import { PaperSizeControl } from "./components/paper-size-control.js";
 import { PosterTextControl } from "./components/poster-text-control.js";
+import { TerrainControls } from "./components/terrain-controls.js";
 
 customElements.define("layer-control-list", LayerControlList);
 customElements.define("map-artwork", ArtworkMap);
@@ -17,8 +18,9 @@ customElements.define("location-search", LocationSearch);
 customElements.define("fetch-data-control", FetchDataControl);
 customElements.define("paper-size-control", PaperSizeControl);
 customElements.define("poster-text-control", PosterTextControl);
+customElements.define("terrain-controls", TerrainControls);
 
 // OSM data is never fetched automatically. Panning/clicking the nav map or
 // using <location-search> updates `center`/`bbox`; Overpass is only called
 // when the user clicks "Fetch map data", to respect its rate limits.
-// The preview-only terrain overlay independently loads public Mapzen tiles.
+// Terrain controls independently load public Mapzen tiles for the poster and exports.

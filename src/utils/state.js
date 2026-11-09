@@ -32,6 +32,8 @@ const state = createStore({
   zoom: DEFAULT_ZOOM,
   bbox: DEFAULT_BBOX,
   osmData: null,
+  // Loaded elevation contours { minor, major, interval } for the current bbox, or null.
+  contours: null,
 
   // Print/paper configuration
   paperSizeId: DEFAULT_PAPER_SIZE,
@@ -54,6 +56,9 @@ const state = createStore({
     { id: "streets", label: "Streets", color: "#888888", stroke: 1, mode: "stroke", visible: true },
     { id: "paths", label: "Foot & cycle paths", color: "#c9a876", stroke: 1, mode: "stroke", visible: true },
   ],
+  backgroundStyle: {
+    color: "#001100"
+  },
   statusText: "",
 });
 

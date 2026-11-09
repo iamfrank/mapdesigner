@@ -288,15 +288,16 @@ export function drawTitleBlock(ctx, { title, subtitle, width, height }) {
  * @param {{ originX: number, originY: number, scale: number }} opts.transform  mercator → print px
  * @param {number} opts.width    Page width in print px
  * @param {number} opts.height   Page height in print px
+ * @param {string} opts.backgroundColor  Page and island fill colour
  * @param {{ sea: any[], islands: any[] }} [opts.sea]  Precomputed sea polygons (print space)
  * @param {{x0:number,y0:number,x1:number,y1:number}|null} [opts.view]  Visible rect in print px for culling (null = draw everything)
  * @param {number} [opts.tol=0]  Vertex-simplification tolerance in print px (0 = exact)
  * @param {number} [opts.minStroke=0]  Minimum stroke width in print px (keeps hairlines visible when zoomed out)
  * @param {{ title: string, subtitle: string }|null} [opts.titleBlock]
  */
-export function drawPoster(ctx, { osmData, styles, transform, width, height, sea, view = null, tol = 0, minStroke = 0, titleBlock }) {
+export function drawPoster(ctx, { osmData, styles, transform, width, height, backgroundColor, sea, view = null, tol = 0, minStroke = 0, titleBlock }) {
   ctx.save();
-  ctx.fillStyle = '#ffffff';
+  ctx.fillStyle = backgroundColor;
   ctx.fillRect(0, 0, width, height);
   ctx.beginPath();
   ctx.rect(0, 0, width, height);
@@ -305,8 +306,8 @@ export function drawPoster(ctx, { osmData, styles, transform, width, height, sea
   if (osmData) {
     const waterStyle = styles.find((s) => s.id === 'water');
     if (waterStyle?.visible) {
-      if (sea) fillSeaPolygons(ctx, sea, waterStyle.color);
-      else renderSea(ctx, osmData.coastlines, transform, waterStyle.color, '#ffffff', { width, height });
+      if (sea) fillSeaPolygons(ctx, sea, waterStyle.color, backgroundColor);
+      else renderSea(ctx, osmData.coastlines, transform, waterStyle.color, backgroundColor, { width, height });
     }
 
     for (const style of styles) {
@@ -318,4 +319,27 @@ export function drawPoster(ctx, { osmData, styles, transform, width, height, sea
 
   if (titleBlock) drawTitleBlock(ctx, { ...titleBlock, width, height });
   ctx.restore();
+}
+
+/**
+ * Add elevation contour layers (below the first stroke layer) to the data and
+ * styles. Returns the inputs unchanged when there are no contours.
+ * @param {object|null} osmData
+ * @param {object[]} styles
+ * @param {{ minor: any[], major: any[] }|null} contours
+ * @param {{ minor: number, major: number }} strokes  Line widths in print px
+ */
+export function withContours(osmData, styles, contours, strokes) {
+  if (!contours) return { osmData, styles };
+  const firstStroke = styles.findIndex((style) => style.mode !== 'fill');
+  const index = firstStroke < 0 ? styles.length : firstStroke;
+  return {
+    osmData: { ...osmData, contoursMinor: contours.minor, contoursMajor: contours.major },
+    styles: [
+      ...styles.slice(0, index),
+      { id: 'contoursMinor', visible: true, mode: 'stroke', color: 'rgba(130,92,55,0.5)', stroke: strokes.minor },
+      { id: 'contoursMajor', visible: true, mode: 'stroke', color: 'rgba(115,76,40,0.8)', stroke: strokes.major },
+      ...styles.slice(index),
+    ],
+  };
 }
