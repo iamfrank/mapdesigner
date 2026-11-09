@@ -64,7 +64,7 @@ export class LayerStyleControl extends HTMLElement {
       },
     );
     this.querySelector(`#${state.id}-color`).addEventListener(
-      "change",
+      "input",
       (ev) => {
         this.state.color = ev.target.value;
         this.emitState(this.state);

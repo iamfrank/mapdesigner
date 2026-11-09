@@ -1,178 +1,173 @@
 import { OVERPASS_URL } from './state.js'
 import state from './state.js'
+import { LAYER_IDS, createOsmCache } from './osm-cache.js'
 
+/** Every fetched way, across all fetches. Lives for the page's lifetime. */
+const cache = createOsmCache()
+
+// highway values that are foot/cycle/bridle paths rather than roads for
+// motor vehicles, so they can be styled distinctly from roadways.
+const PATH_HIGHWAY_VALUES = ['footway', 'path', 'cycleway', 'bridleway', 'steps', 'pedestrian', 'track']
+const PATH_RE = `^(${PATH_HIGHWAY_VALUES.join('|')})$`
+
+/**
+ * Overpass selectors per layer. Large areas (forests, lakes, ...) are often
+ * mapped as multipolygon *relations* with the tag on the relation itself, so
+ * area layers query relations as well as ways.
+ */
+const WAY_AND_RELATION = (filters) => filters.flatMap((f) => [`way${f};`, `relation${f};`])
+const LAYER_QUERIES = {
+  streets: () => [`way["highway"]["highway"!~"${PATH_RE}"];`],
+  paths: () => [`way["highway"~"${PATH_RE}"];`],
+  coastlines: () => WAY_AND_RELATION(['["natural"="coastline"]']),
+  water: () => WAY_AND_RELATION(['["natural"="water"]', '["landuse"="reservoir"]']),
+  parks: () => WAY_AND_RELATION([
+    '["leisure"="park"]', '["landuse"="forest"]', '["landuse"="grass"]',
+    '["landuse"="meadow"]', '["natural"="wood"]',
+  ]),
+  buildings: () => WAY_AND_RELATION(['["building"]']),
+  railways: () => [`way["railway"];`],
+}
+
+/** Layer ids whose style is currently enabled in the style UI. */
+export function enabledLayerIds() {
+  return state.get('styles').filter((s) => s.visible && LAYER_IDS.includes(s.id)).map((s) => s.id)
+}
+
+/** Current merged data for every layer, reusing unchanged arrays from `prev`. */
+function buildOsmData(prev, changed) {
+  const data = {}
+  for (const id of LAYER_IDS) {
+    data[id] = prev?.[id] && !changed.includes(id) ? prev[id] : cache.waysOf(id)
+  }
+  return data
+}
+
+let fetching = false
+
+/**
+ * Fetch the enabled layers for the current bbox that aren't cached yet, merge
+ * them into `state.osmData` (which triggers a canvas rerender).
+ */
 export async function updateOsmData() {
-  try {
-    const osmData = await fetchOSMData();
-    if (osmData) {
-      state.update({
-        osmData,
-        statusText: `Loaded: ${osmData.streets.length.toLocaleString()} streets, ` +
-          `${osmData.paths.length.toLocaleString()} paths, ` +
-          `${osmData.water.length.toLocaleString()} water, ` +
-          `${osmData.parks.length.toLocaleString()} parks, ` +
-          `${osmData.buildings.length.toLocaleString()} buildings, ` +
-          `${osmData.railways.length.toLocaleString()} railways, ` +
-          `${osmData.coastlines.length.toLocaleString()} coastline ways`
-      })
-    }
+  if (fetching) return
+  const bbox = state.get('bbox')
+  if (!bbox) return
 
+  const missing = cache.missing(enabledLayerIds(), bbox)
+  if (missing.length === 0) {
+    state.set('statusText', enabledLayerIds().length ? 'Enabled layers already loaded for this area.' : 'No layers enabled.')
+    return
+  }
+
+  fetching = true
+  try {
+    const result = await fetchOSMData(bbox, missing)
+    const changed = cache.add(missing, bbox, result)
+    const prev = state.get('osmData')
+    const osmData = buildOsmData(prev, changed)
+    const summary = missing.map((id) => `${osmData[id].length.toLocaleString()} ${id}`).join(', ')
+    // osmData is always a new object, so subscribers fire even when no layer grew.
+    state.update({ osmData, statusText: `Loaded: ${summary}` })
   } catch (err) {
     state.set('statusText', `Error: ${err.message}`)
-    console.error(err);
+    console.error(err)
+  } finally {
+    fetching = false
   }
 }
 
 /**
- * Fetch OSM ways (highways, coastlines, water, parks/green space, buildings,
- * railways) for the configured bounding box.
+ * Fetch OSM ways for the given layers within `bbox`.
  * See
  * - https://wiki.openstreetmap.org/wiki/Map_features
  * - https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide
- * @returns {Promise<{ streets: [number,number][][], paths: [number,number][][], coastlines: [number,number][][], water: [number,number][][], parks: [number,number][][], buildings: [number,number][][], railways: [number,number][][] }>}
+ * @param {[number,number,number,number]} bbox  [minLat, minLon, maxLat, maxLon]
+ * @param {string[]} layerIds
+ * @returns {Promise<Record<string, Map<string, [number,number][]>>>} layerId -> wayKey -> coords
  */
-export async function fetchOSMData() {
-  const bbox = state.get('bbox')
-  console.log('fetching', state.get('bbox'))
-  if (!bbox) {
-    return
-  }
-  // Large areas (forests, lakes, ...) are frequently mapped as multipolygon
-  // *relations* with the tag on the relation itself rather than on its
-  // member ways, so those need to be queried explicitly too. ">>" recurses
-  // all the way down (relation → member ways → nodes), not just one level.
+export async function fetchOSMData(bbox, layerIds) {
+  // ">>" recurses all the way down (relation → member ways → nodes).
   const query = `[out:json][timeout:120][bbox:${bbox.join(',')}];
 (
-  way["highway"];
-  way["natural"="coastline"];
-  way["natural"="water"];
-  way["landuse"="reservoir"];
-  way["leisure"="park"];
-  way["landuse"="forest"];
-  way["landuse"="grass"];
-  way["landuse"="meadow"];
-  way["natural"="wood"];
-  way["building"];
-  way["railway"];
-  relation["natural"="coastline"];
-  relation["natural"="water"];
-  relation["landuse"="reservoir"];
-  relation["leisure"="park"];
-  relation["landuse"="forest"];
-  relation["landuse"="grass"];
-  relation["landuse"="meadow"];
-  relation["natural"="wood"];
-  relation["building"];
+${layerIds.flatMap((id) => LAYER_QUERIES[id]()).map((l) => '  ' + l).join('\n')}
 );
 out body;
 >>;
-out skel qt;`;
+out skel qt;`
 
-  state.set('statusText', "Fetching OSM data ...")
+  state.set('statusText', `Fetching OSM data (${layerIds.join(', ')}) ...`)
 
   const response = await fetch(OVERPASS_URL, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "data=" + encodeURIComponent(query),
-  });
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: 'data=' + encodeURIComponent(query),
+  })
 
   if (!response.ok) {
-    throw new Error(
-      `Overpass request failed: ${response.status} ${response.statusText}`,
-    );
+    throw new Error(`Overpass request failed: ${response.status} ${response.statusText}`)
   }
 
   state.set('statusText', 'Parsing OSM data…')
-  const json = await response.json();
-  return parseOSMData(json);
+  return parseOSMData(await response.json(), layerIds)
 }
 
 /**
- * Parse an Overpass JSON response into arrays of polylines, bucketed by
- * feature category.
+ * Parse an Overpass JSON response into polylines bucketed by layer, keyed by
+ * OSM id (`w<id>` for ways, `r<id>/w<id>` for relation members). Only the
+ * requested layers are returned.
  * @param {object} json
- * @returns {{ streets: [number,number][][], paths: [number,number][][], coastlines: [number,number][][], water: [number,number][][], parks: [number,number][][], buildings: [number,number][][], railways: [number,number][][] }}
+ * @param {string[]} layerIds
+ * @returns {Record<string, Map<string, [number,number][]>>}
  */
-function parseOSMData(json) {
-  // Build a map of nodeId → {lon, lat}, and a map of wayId → node ids, so
-  // relation members can be resolved regardless of the order elements come
-  // back in.
-  const nodes = new Map();
-  const ways = new Map();
+export function parseOSMData(json, layerIds) {
+  // nodeId → [lon, lat], wayId → node ids, so relation members resolve
+  // regardless of element order.
+  const nodes = new Map()
+  const ways = new Map()
   for (const el of json.elements) {
-    if (el.type === "node") {
-      nodes.set(el.id, [el.lon, el.lat]);
-    } else if (el.type === "way") {
-      ways.set(el.id, el.nodes);
-    }
+    if (el.type === 'node') nodes.set(el.id, [el.lon, el.lat])
+    else if (el.type === 'way') ways.set(el.id, el.nodes)
   }
 
-  const streets = [];
-  const paths = [];
-  const coastlines = [];
-  const water = [];
-  const parks = [];
-  const buildings = [];
-  const railways = [];
+  const result = Object.fromEntries(layerIds.map((id) => [id, new Map()]))
 
-  // highway values that are foot/cycle/bridle paths rather than roads for
-  // motor vehicles, so they can be styled distinctly from roadways.
-  const PATH_HIGHWAY_VALUES = new Set([
-    "footway", "path", "cycleway", "bridleway", "steps", "pedestrian", "track",
-  ]);
+  const MATCHERS = {
+    coastlines: (t) => t.natural === 'coastline',
+    water: (t) => t.natural === 'water' || t.landuse === 'reservoir',
+    parks: (t) => t.leisure === 'park' || t.landuse === 'forest' || t.landuse === 'grass' ||
+      t.landuse === 'meadow' || t.natural === 'wood',
+    buildings: (t) => !!t.building,
+    railways: (t) => !!t.railway,
+    streets: (t) => !!t.highway && !PATH_HIGHWAY_VALUES.includes(t.highway),
+    paths: (t) => PATH_HIGHWAY_VALUES.includes(t.highway),
+  }
+  // First matching *requested* layer wins, in this priority order.
+  const order = ['coastlines', 'water', 'parks', 'buildings', 'railways', 'streets', 'paths']
+    .filter((id) => layerIds.includes(id))
+  const layerFor = (tags) => order.find((id) => MATCHERS[id](tags)) ?? null
 
-  const bucketFor = (tags) => {
-    if (tags.natural === "coastline") return coastlines;
-    if (tags.natural === "water" || tags.landuse === "reservoir") return water;
-    if (
-      tags.leisure === "park" ||
-      tags.landuse === "forest" ||
-      tags.landuse === "grass" ||
-      tags.landuse === "meadow" ||
-      tags.natural === "wood"
-    ) return parks;
-    if (tags.building) return buildings;
-    if (tags.railway) return railways;
-    if (tags.highway) return PATH_HIGHWAY_VALUES.has(tags.highway) ? paths : streets;
-    return null;
-  };
-
-  const resolveCoords = (nodeIds) =>
-    (nodeIds ?? []).map((id) => nodes.get(id)).filter(Boolean);
+  const resolveCoords = (nodeIds) => (nodeIds ?? []).map((id) => nodes.get(id)).filter(Boolean)
 
   for (const el of json.elements) {
-    if (el.type === "way") {
-      const tags = el.tags ?? {};
-      const bucket = bucketFor(tags);
-      if (!bucket) continue;
-
-      const coords = resolveCoords(el.nodes);
-      if (coords.length < 2) continue;
-      bucket.push(coords);
-    } else if (el.type === "relation") {
-      // Large areas (forests, lakes, parks, ...) are often mapped as
-      // multipolygon relations, with the tag on the relation rather than on
-      // its member ways. Render each "outer" member way as its own ring,
-      // using the relation's tags (no hole-cutting for "inner" members, same
-      // simplification as plain area ways).
-      const tags = el.tags ?? {};
-      const bucket = bucketFor(tags);
-      if (!bucket) continue;
-
+    if (el.type === 'way') {
+      const layer = layerFor(el.tags ?? {})
+      if (!layer) continue
+      const coords = resolveCoords(el.nodes)
+      if (coords.length >= 2) result[layer].set(`w${el.id}`, coords)
+    } else if (el.type === 'relation') {
+      // Render each "outer" member way as its own ring, using the relation's
+      // tags (no hole-cutting for "inner" members).
+      const layer = layerFor(el.tags ?? {})
+      if (!layer) continue
       for (const member of el.members ?? []) {
-        if (member.type !== "way") continue;
-        if (member.role && member.role !== "outer") continue;
-
-        const coords = resolveCoords(ways.get(member.ref));
-        if (coords.length < 2) continue;
-        bucket.push(coords);
+        if (member.type !== 'way') continue
+        if (member.role && member.role !== 'outer') continue
+        const coords = resolveCoords(ways.get(member.ref))
+        if (coords.length >= 2) result[layer].set(`r${el.id}/w${member.ref}`, coords)
       }
     }
   }
 
-  console.info(
-    `Parsed: ${streets.length} streets, ${paths.length} paths, ${water.length} water, ${parks.length} parks, ` +
-    `${buildings.length} buildings, ${railways.length} railways, ${coastlines.length} coastline ways`,
-  );
-  return { streets, paths, coastlines, water, parks, buildings, railways };
+  return result
 }

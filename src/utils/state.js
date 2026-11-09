@@ -50,11 +50,11 @@ const state = createStore({
   styles: [
     { id: "water", label: "Water", color: "#a5c9e8", stroke: 1, mode: "fill", visible: true },
     { id: "parks", label: "Parks & green", color: "#bfe0b8", stroke: 1, mode: "fill", visible: true },
-    { id: "buildings", label: "Buildings", color: "#d8d3c9", stroke: 1, mode: "fill", visible: true },
+    { id: "buildings", label: "Buildings", color: "#d8d3c9", stroke: 1, mode: "fill", visible: false },
     { id: "coastlines", label: "Coastlines", color: "#0000aa", stroke: 1, mode: "stroke", visible: true },
-    { id: "railways", label: "Railways", color: "#555555", stroke: 1, mode: "stroke", visible: true },
+    { id: "railways", label: "Railways", color: "#555555", stroke: 1, mode: "stroke", visible: false },
     { id: "streets", label: "Streets", color: "#888888", stroke: 1, mode: "stroke", visible: true },
-    { id: "paths", label: "Foot & cycle paths", color: "#c9a876", stroke: 1, mode: "stroke", visible: true },
+    { id: "paths", label: "Foot & cycle paths", color: "#c9a876", stroke: 1, mode: "stroke", visible: false },
   ],
   backgroundStyle: {
     color: "#001100"
