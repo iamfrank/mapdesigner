@@ -6,8 +6,6 @@ const FONTS = [
   ["'Courier New', monospace", "Monospace"],
 ];
 
-const escapeAttr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-
 /**
  * Style controls for one layer. Shows a visibility toggle and colour for every
  * layer, plus stroke width (`mode="stroke"`) or font, size and halo
@@ -25,8 +23,20 @@ export class LayerStyleControl extends HTMLElement {
     mode: "stroke",
   };
 
+  #renderQueued = false;
+
   connectedCallback() {
-    this.render(this.state);
+    this.#queueRender();
+  }
+
+  /** Coalesce the burst of attribute changes on creation into one render. */
+  #queueRender() {
+    if (this.#renderQueued) return;
+    this.#renderQueued = true;
+    queueMicrotask(() => {
+      this.#renderQueued = false;
+      this.render(this.state);
+    });
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
@@ -42,7 +52,7 @@ export class LayerStyleControl extends HTMLElement {
       default:
         this.state[name] = String(newValue);
     }
-    this.render(this.state);
+    this.#queueRender();
   }
 
   render(state) {
@@ -59,7 +69,7 @@ export class LayerStyleControl extends HTMLElement {
       <input class="layer-color-select" type="number" min="0.1" step="0.1" id="${id}-size" value="${state.size ?? 1}">
       <label for="${id}-font">Font</label>
       <select id="${id}-font">
-        ${FONTS.map(([value, name]) => `<option value="${escapeAttr(value)}" ${value === state.font ? "selected" : ""}>${name}</option>`).join("")}
+        ${FONTS.map(([value, name]) => `<option value="${value}" ${value === state.font ? "selected" : ""}>${name}</option>`).join("")}
       </select>
       <label for="${id}-halo">Halo</label>
       <input type="checkbox" id="${id}-halo" ${state.halo !== false ? "checked" : ""}>`;

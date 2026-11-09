@@ -35,7 +35,7 @@ export class LayerControlList extends HTMLElement {
             color="${style.color}"
             mode="${style.mode}"
             ${style.mode === "text"
-              ? `size="${style.size ?? 1}" font="${String(style.font ?? "serif").replace(/"/g, "&quot;")}" halo="${style.halo !== false}"`
+              ? `size="${style.size ?? 1}" font="${style.font ?? "serif"}" halo="${style.halo !== false}"`
               : `stroke="${style.stroke}"`}>
           </layer-style-control>
         </li>`;

@@ -8,10 +8,10 @@ import { toMercator, toCanvas } from './projection.js';
  * on the camera, so the preview and the export place labels identically.
  */
 
-/** Per `place=*` value: font size (fraction of the page's short side), priority, casing. */
+/** Per `place=*` value: font size (fraction of the page's short side), priority (low first), typography. */
 export const PLACE_LABEL_STYLES = {
-  city: { size: 0.024, rank: 0 },
-  town: { size: 0.017, rank: 1 },
+  city: { size: 0.024, rank: 0, bold: true },
+  town: { size: 0.017, rank: 1, bold: true },
   island: { size: 0.013, rank: 2, italic: true },
   suburb: { size: 0.011, rank: 3, upper: true },
   village: { size: 0.011, rank: 4 },
@@ -48,25 +48,20 @@ export function layoutPlaceLabels(ctx, places, transform, { width, height, size 
     .sort((a, b) => PLACE_LABEL_STYLES[a.place].rank - PLACE_LABEL_STYLES[b.place].rank
       || (b.population ?? 0) - (a.population ?? 0));
 
-  // Uniform grid of placed boxes for cheap overlap tests.
+  // Placed boxes bucketed in a uniform grid, so overlap tests stay local.
   const cell = Math.max(1, unit * 0.05);
   const grid = new Map();
-  const cellsOf = ([x0, y0, x1, y1], fn) => {
+  const cellKeys = ([x0, y0, x1, y1]) => {
+    const keys = [];
     for (let cx = Math.floor(x0 / cell); cx <= Math.floor(x1 / cell); cx++) {
-      for (let cy = Math.floor(y0 / cell); cy <= Math.floor(y1 / cell); cy++) {
-        if (fn(`${cx},${cy}`)) return true;
-      }
+      for (let cy = Math.floor(y0 / cell); cy <= Math.floor(y1 / cell); cy++) keys.push(`${cx},${cy}`);
     }
-    return false;
+    return keys;
   };
-  const overlaps = (b) => cellsOf(b, (k) => (grid.get(k) ?? []).some((o) =>
-    b[0] < o[2] && b[2] > o[0] && b[1] < o[3] && b[3] > o[1]));
-  const insert = (b) => cellsOf(b, (k) => {
-    if (!grid.has(k)) grid.set(k, []);
-    grid.get(k).push(b);
-  });
+  const hits = (a, b) => a[0] < b[2] && a[2] > b[0] && a[1] < b[3] && a[3] > b[1];
 
   const labels = [];
+  let current = '';
   ctx.save();
   for (const p of sorted) {
     const st = PLACE_LABEL_STYLES[p.place];
@@ -74,16 +69,17 @@ export function layoutPlaceLabels(ctx, places, transform, { width, height, size 
     if (x < 0 || y < 0 || x > width || y > height) continue;
 
     const fontSize = Math.max(1, unit * st.size);
-    const fontStr = `${st.italic ? 'italic ' : ''}${st.rank <= 1 ? 'bold ' : ''}${fontSize}px ${font}`;
+    const fontStr = `${st.italic ? 'italic ' : ''}${st.bold ? 'bold ' : ''}${fontSize}px ${font}`;
     const text = st.upper ? p.name.toUpperCase() : p.name;
     const spacing = st.upper ? fontSize * 0.15 : 0;
-    ctx.font = fontStr;
+    if (fontStr !== current) ctx.font = current = fontStr;
     const w = ctx.measureText(text).width + spacing * text.length;
     const pad = fontSize * 0.3;
     const box = [x - w / 2 - pad, y - fontSize / 2 - pad, x + w / 2 + pad, y + fontSize / 2 + pad];
     if (box[0] < 0 || box[1] < 0 || box[2] > width || box[3] > height) continue;
-    if (overlaps(box)) continue;
-    insert(box);
+    const keys = cellKeys(box);
+    if (keys.some((k) => grid.get(k)?.some((o) => hits(box, o)))) continue;
+    for (const k of keys) grid.has(k) ? grid.get(k).push(box) : grid.set(k, [box]);
     labels.push({ text, x, y, font: fontStr, spacing, fontSize, box });
   }
   ctx.restore();
@@ -111,11 +107,15 @@ export function renderPlaceLabels(ctx, places, transform, style, { width, height
   ctx.lineJoin = 'round';
   ctx.fillStyle = style.color;
   ctx.strokeStyle = haloColor;
+  ctx.letterSpacing = '0px';
+  let font = '', spacing = 0;
   for (const l of labels) {
     const b = l.box;
     if (view && (b[2] < view.x0 || b[0] > view.x1 || b[3] < view.y0 || b[1] > view.y1)) continue;
-    ctx.font = l.font;
-    ctx.letterSpacing = `${l.spacing}px`;
+    // Labels come sorted by place type, so font changes are rare: only set
+    // context state when it differs (font assignment re-parses the string).
+    if (l.font !== font) ctx.font = font = l.font;
+    if (l.spacing !== spacing) ctx.letterSpacing = `${spacing = l.spacing}px`;
     if (style.halo !== false) {
       ctx.lineWidth = l.fontSize * 0.2;
       ctx.strokeText(l.text, l.x, l.y);

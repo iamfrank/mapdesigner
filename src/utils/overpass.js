@@ -7,34 +7,32 @@ const cache = createOsmCache()
 
 /**
  * `highway=*` values per road layer, so each kind of road can be styled on
- * its own. The `streets` layer is the catch-all for every other highway value
+ * its own. `streets` is the catch-all for every other highway value
  * (residential, unclassified, service, living_street, ...).
  * See https://wiki.openstreetmap.org/wiki/Key:highway
  */
-export const ROAD_CLASSES = {
+const ROAD_CLASSES = {
   highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link'],
   mainRoads: ['primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link'],
   paths: ['footway', 'path', 'cycleway', 'bridleway', 'steps', 'pedestrian', 'corridor'],
   tracks: ['track'],
 }
-const NON_STREET_VALUES = Object.values(ROAD_CLASSES).flat()
+const ROAD_LAYERS = [...Object.keys(ROAD_CLASSES), 'streets']
+/** highway value → road layer id */
+const ROAD_LAYER_OF = new Map(Object.entries(ROAD_CLASSES).flatMap(([id, values]) => values.map((v) => [v, id])))
+const roadLayerOf = (highway) => (highway ? ROAD_LAYER_OF.get(highway) ?? 'streets' : null)
 const valuesRe = (values) => `^(${values.join('|')})$`
 
 /** `place=*` values that get a name label. */
-export const PLACE_VALUES = ['city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood', 'hamlet', 'island', 'islet', 'locality']
+const PLACE_VALUES = ['city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood', 'hamlet', 'island', 'islet', 'locality']
 
 /**
- * Overpass selectors per layer. Large areas (forests, lakes, ...) are often
- * mapped as multipolygon *relations* with the tag on the relation itself, so
- * area layers query relations as well as ways.
+ * Overpass selectors per non-road layer. Large areas (forests, lakes, ...) are
+ * often mapped as multipolygon *relations* with the tag on the relation
+ * itself, so area layers query relations as well as ways.
  */
 const WAY_AND_RELATION = (filters) => filters.flatMap((f) => [`way${f};`, `relation${f};`])
 const LAYER_QUERIES = {
-  highways: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.highways)}"];`],
-  mainRoads: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.mainRoads)}"];`],
-  streets: () => [`way["highway"]["highway"!~"${valuesRe(NON_STREET_VALUES)}"];`],
-  paths: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.paths)}"];`],
-  tracks: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.tracks)}"];`],
   places: () => [`node["place"~"${valuesRe(PLACE_VALUES)}"]["name"];`],
   coastlines: () => WAY_AND_RELATION(['["natural"="coastline"]']),
   water: () => WAY_AND_RELATION(['["natural"="water"]', '["landuse"="reservoir"]']),
@@ -44,6 +42,20 @@ const LAYER_QUERIES = {
   ]),
   buildings: () => WAY_AND_RELATION(['["building"]']),
   railways: () => [`way["railway"];`],
+}
+
+/**
+ * One statement covering all requested road layers, so Overpass scans the
+ * highway ways only once however many road layers are enabled.
+ */
+export function roadQuery(layerIds) {
+  const roads = ROAD_LAYERS.filter((id) => layerIds.includes(id))
+  if (roads.length === 0) return []
+  if (!roads.includes('streets')) {
+    return [`way["highway"~"${valuesRe(roads.flatMap((id) => ROAD_CLASSES[id]))}"];`]
+  }
+  const excluded = Object.keys(ROAD_CLASSES).filter((id) => !roads.includes(id)).flatMap((id) => ROAD_CLASSES[id])
+  return [excluded.length ? `way["highway"]["highway"!~"${valuesRe(excluded)}"];` : 'way["highway"];']
 }
 
 /** Layer ids whose style is currently enabled in the style UI. */
@@ -107,7 +119,7 @@ export async function fetchOSMData(bbox, layerIds) {
   // ">>" recurses all the way down (relation → member ways → nodes).
   const query = `[out:json][timeout:120][bbox:${bbox.join(',')}];
 (
-${layerIds.flatMap((id) => LAYER_QUERIES[id]()).map((l) => '  ' + l).join('\n')}
+${[...roadQuery(layerIds), ...layerIds.flatMap((id) => LAYER_QUERIES[id]?.() ?? [])].map((l) => '  ' + l).join('\n')}
 );
 out body;
 >>;
@@ -157,23 +169,22 @@ export function parseOSMData(json, layerIds) {
       t.landuse === 'meadow' || t.natural === 'wood',
     buildings: (t) => !!t.building,
     railways: (t) => !!t.railway,
-    highways: (t) => ROAD_CLASSES.highways.includes(t.highway),
-    mainRoads: (t) => ROAD_CLASSES.mainRoads.includes(t.highway),
-    streets: (t) => !!t.highway && !NON_STREET_VALUES.includes(t.highway),
-    paths: (t) => ROAD_CLASSES.paths.includes(t.highway),
-    tracks: (t) => ROAD_CLASSES.tracks.includes(t.highway),
   }
-  // First matching *requested* layer wins, in this priority order.
-  const order = ['coastlines', 'water', 'parks', 'buildings', 'railways', 'highways', 'mainRoads', 'streets', 'paths', 'tracks']
-    .filter((id) => layerIds.includes(id))
-  const layerFor = (tags) => order.find((id) => MATCHERS[id](tags)) ?? null
+  // First matching *requested* layer wins, in this priority order; roads last.
+  const order = Object.keys(MATCHERS).filter((id) => layerIds.includes(id))
+  const layerFor = (tags) => {
+    const layer = order.find((id) => MATCHERS[id](tags))
+    if (layer) return layer
+    const road = roadLayerOf(tags.highway)
+    return road && result[road] ? road : null
+  }
 
   const resolveCoords = (nodeIds) => (nodeIds ?? []).map((id) => nodes.get(id)).filter(Boolean)
 
   for (const el of json.elements) {
     if (el.type === 'node') {
       const t = el.tags
-      if (result.places && t?.name && PLACE_VALUES.includes(t.place)) {
+      if (t?.name && result.places && PLACE_VALUES.includes(t.place)) {
         result.places.set(`n${el.id}`, {
           coord: [el.lon, el.lat],
           name: t.name,

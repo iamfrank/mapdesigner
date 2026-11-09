@@ -1,6 +1,6 @@
 import test from 'node:test'
 import assert from 'node:assert/strict'
-import { parseOSMData } from '../src/utils/overpass.js'
+import { parseOSMData, roadQuery } from '../src/utils/overpass.js'
 import { layoutPlaceLabels } from '../src/utils/labels.js'
 import { computeTransform } from '../src/utils/projection.js'
 
@@ -42,4 +42,17 @@ test('label layout prioritises bigger places and drops overlaps', () => {
   ]
   const labels = layoutPlaceLabels(ctx, places, transform, { width: 1000, height: 1000 })
   assert.deepEqual(labels.map((l) => l.text), ['City', 'Hamlet'])
+})
+
+test('road layers share a single Overpass statement', () => {
+  assert.deepEqual(roadQuery(['water']), [])
+  assert.deepEqual(roadQuery(['highways', 'tracks']), ['way["highway"~"^(motorway|motorway_link|trunk|trunk_link|track)$"];'])
+  assert.deepEqual(roadQuery(['streets', 'highways', 'mainRoads', 'paths', 'tracks']), ['way["highway"];'])
+  assert.deepEqual(roadQuery(['streets', 'highways', 'mainRoads', 'paths']), ['way["highway"]["highway"!~"^(track)$"];'])
+})
+
+test('unrequested road classes are not misfiled as streets', () => {
+  const json = { elements: [node(1, 0, 0), node(2, 1, 1), way(10, 'motorway'), way(11, 'residential')] }
+  const r = parseOSMData(json, ['streets'])
+  assert.deepEqual([...r.streets.keys()], ['w11'])
 })
