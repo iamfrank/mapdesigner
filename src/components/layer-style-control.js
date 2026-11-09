@@ -1,5 +1,20 @@
+const FONTS = [
+  ["serif", "Serif"],
+  ["sans-serif", "Sans-serif"],
+  ["Georgia, serif", "Georgia"],
+  ["'Helvetica Neue', Helvetica, Arial, sans-serif", "Helvetica"],
+  ["'Courier New', monospace", "Monospace"],
+];
+
+const escapeAttr = (s) => String(s).replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
+
+/**
+ * Style controls for one layer. Shows a visibility toggle and colour for every
+ * layer, plus stroke width (`mode="stroke"`) or font, size and halo
+ * (`mode="text"`). Emits `layer:change` with the full style object.
+ */
 export class LayerStyleControl extends HTMLElement {
-  static observedAttributes = ["id", "label", "color", "stroke", "visible", "mode"];
+  static observedAttributes = ["id", "label", "color", "stroke", "visible", "mode", "size", "font", "halo", "group"];
 
   state = {
     id: "",
@@ -10,73 +25,65 @@ export class LayerStyleControl extends HTMLElement {
     mode: "stroke",
   };
 
-  constructor() {
-    super();
-  }
-
   connectedCallback() {
     this.render(this.state);
   }
 
   attributeChangedCallback(name, oldValue, newValue) {
     switch (name) {
-      case "id":
-        this.state.id = String(newValue);
-        break;
-      case "label":
-        this.state.label = String(newValue);
-        break;
-      case "color":
-        this.state.color = String(newValue);
-        break;
       case "stroke":
-        this.state.stroke = Number(newValue);
+      case "size":
+        this.state[name] = Number(newValue);
         break;
       case "visible":
-        this.state.visible = Boolean(newValue);
-        break;
-      case "mode":
-        this.state.mode = String(newValue);
+      case "halo":
+        this.state[name] = newValue === "true" || newValue === "";
         break;
       default:
-      // Nothing
+        this.state[name] = String(newValue);
     }
     this.render(this.state);
   }
 
   render(state) {
-    const isFill = state.mode === "fill";
+    const { id, mode } = state;
+    const colorLabel = mode === "fill" ? "Fill color" : mode === "text" ? "Text color" : "Stroke color";
+    let extra = "";
+    if (mode === "stroke") {
+      extra = `
+      <label for="${id}-stroke">Stroke width</label>
+      <input class="layer-color-select" type="number" min="0" step="0.5" id="${id}-stroke" value="${state.stroke}">`;
+    } else if (mode === "text") {
+      extra = `
+      <label for="${id}-size">Text size</label>
+      <input class="layer-color-select" type="number" min="0.1" step="0.1" id="${id}-size" value="${state.size ?? 1}">
+      <label for="${id}-font">Font</label>
+      <select id="${id}-font">
+        ${FONTS.map(([value, name]) => `<option value="${escapeAttr(value)}" ${value === state.font ? "selected" : ""}>${name}</option>`).join("")}
+      </select>
+      <label for="${id}-halo">Halo</label>
+      <input type="checkbox" id="${id}-halo" ${state.halo !== false ? "checked" : ""}>`;
+    }
     this.innerHTML = `
-      <input type="checkbox" id="${state.id}-visible" ${state.visible ? "checked" : ""}>
-      <label for="${state.id}-visible">${state.label}</label>
-      <label for="${state.id}-color">${isFill ? "Fill color" : "Stroke color"}</label>
-      <input class="layer-color-select" type="color" id="${state.id}-color" value="${state.color}">
-      ${isFill ? "" : `
-      <label for="${state.id}-stroke">Stroke width</label>
-      <input class="layer-color-select" type="number" id="${state.id}-stroke" value="${state.stroke}">
-      `}
+      <input type="checkbox" id="${id}-visible" ${state.visible ? "checked" : ""}>
+      <label for="${id}-visible">${state.label}</label>
+      <label for="${id}-color">${colorLabel}</label>
+      <input class="layer-color-select" type="color" id="${id}-color" value="${state.color}">
+      ${extra}
     `;
-    this.querySelector(`#${state.id}-stroke`)?.addEventListener(
-      "change",
-      (ev) => {
-        this.state.stroke = Number(ev.target.value);
+
+    const bind = (suffix, event, read) => {
+      this.querySelector(`#${id}-${suffix}`)?.addEventListener(event, (ev) => {
+        this.state = { ...this.state, ...read(ev.target) };
         this.emitState(this.state);
-      },
-    );
-    this.querySelector(`#${state.id}-color`).addEventListener(
-      "input",
-      (ev) => {
-        this.state.color = ev.target.value;
-        this.emitState(this.state);
-      },
-    );
-    this.querySelector(`#${state.id}-visible`).addEventListener(
-      "change",
-      (ev) => {
-        this.state.visible = ev.target.checked;
-        this.emitState(this.state);
-      },
-    );
+      });
+    };
+    bind("stroke", "change", (t) => ({ stroke: Number(t.value) }));
+    bind("size", "change", (t) => ({ size: Number(t.value) || 1 }));
+    bind("font", "change", (t) => ({ font: t.value }));
+    bind("halo", "change", (t) => ({ halo: t.checked }));
+    bind("color", "input", (t) => ({ color: t.value }));
+    bind("visible", "change", (t) => ({ visible: t.checked }));
   }
 
   emitState(state) {

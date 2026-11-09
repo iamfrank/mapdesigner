@@ -47,14 +47,20 @@ const state = createStore({
   autoSubtitle: true,
   showTitleBlock: true,
 
+  // Drawn in this order (later on top). `group` only affects the style UI.
+  // Stroke widths are in print px; text `size` is a multiplier.
   styles: [
-    { id: "water", label: "Water", color: "#a5c9e8", stroke: 1, mode: "fill", visible: true },
-    { id: "parks", label: "Parks & green", color: "#bfe0b8", stroke: 1, mode: "fill", visible: true },
-    { id: "buildings", label: "Buildings", color: "#d8d3c9", stroke: 1, mode: "fill", visible: false },
-    { id: "coastlines", label: "Coastlines", color: "#0000aa", stroke: 1, mode: "stroke", visible: true },
-    { id: "railways", label: "Railways", color: "#555555", stroke: 1, mode: "stroke", visible: false },
-    { id: "streets", label: "Streets", color: "#888888", stroke: 1, mode: "stroke", visible: true },
-    { id: "paths", label: "Foot & cycle paths", color: "#c9a876", stroke: 1, mode: "stroke", visible: false },
+    { id: "water", group: "Areas", label: "Water", color: "#a5c9e8", stroke: 1, mode: "fill", visible: true },
+    { id: "parks", group: "Areas", label: "Parks & green", color: "#bfe0b8", stroke: 1, mode: "fill", visible: true },
+    { id: "buildings", group: "Areas", label: "Buildings", color: "#d8d3c9", stroke: 1, mode: "fill", visible: false },
+    { id: "coastlines", group: "Lines", label: "Coastlines", color: "#0000aa", stroke: 1, mode: "stroke", visible: true },
+    { id: "railways", group: "Lines", label: "Railways", color: "#555555", stroke: 1, mode: "stroke", visible: false },
+    { id: "tracks", group: "Roads", label: "Tracks", color: "#7a6a4f", stroke: 1, mode: "stroke", visible: false },
+    { id: "paths", group: "Roads", label: "Foot & cycle paths", color: "#c9a876", stroke: 1, mode: "stroke", visible: false },
+    { id: "streets", group: "Roads", label: "Streets", color: "#888888", stroke: 1, mode: "stroke", visible: true },
+    { id: "mainRoads", group: "Roads", label: "Main roads", color: "#e0cf8a", stroke: 2, mode: "stroke", visible: true },
+    { id: "highways", group: "Roads", label: "Highways", color: "#f2a65a", stroke: 3, mode: "stroke", visible: true },
+    { id: "places", group: "Labels", label: "Place names", color: "#f2f2e6", size: 1, font: "serif", halo: true, mode: "text", visible: true },
   ],
   backgroundStyle: {
     color: "#001100"

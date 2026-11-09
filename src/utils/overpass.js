@@ -5,10 +5,23 @@ import { LAYER_IDS, createOsmCache } from './osm-cache.js'
 /** Every fetched way, across all fetches. Lives for the page's lifetime. */
 const cache = createOsmCache()
 
-// highway values that are foot/cycle/bridle paths rather than roads for
-// motor vehicles, so they can be styled distinctly from roadways.
-const PATH_HIGHWAY_VALUES = ['footway', 'path', 'cycleway', 'bridleway', 'steps', 'pedestrian', 'track']
-const PATH_RE = `^(${PATH_HIGHWAY_VALUES.join('|')})$`
+/**
+ * `highway=*` values per road layer, so each kind of road can be styled on
+ * its own. The `streets` layer is the catch-all for every other highway value
+ * (residential, unclassified, service, living_street, ...).
+ * See https://wiki.openstreetmap.org/wiki/Key:highway
+ */
+export const ROAD_CLASSES = {
+  highways: ['motorway', 'motorway_link', 'trunk', 'trunk_link'],
+  mainRoads: ['primary', 'primary_link', 'secondary', 'secondary_link', 'tertiary', 'tertiary_link'],
+  paths: ['footway', 'path', 'cycleway', 'bridleway', 'steps', 'pedestrian', 'corridor'],
+  tracks: ['track'],
+}
+const NON_STREET_VALUES = Object.values(ROAD_CLASSES).flat()
+const valuesRe = (values) => `^(${values.join('|')})$`
+
+/** `place=*` values that get a name label. */
+export const PLACE_VALUES = ['city', 'town', 'village', 'suburb', 'quarter', 'neighbourhood', 'hamlet', 'island', 'islet', 'locality']
 
 /**
  * Overpass selectors per layer. Large areas (forests, lakes, ...) are often
@@ -17,8 +30,12 @@ const PATH_RE = `^(${PATH_HIGHWAY_VALUES.join('|')})$`
  */
 const WAY_AND_RELATION = (filters) => filters.flatMap((f) => [`way${f};`, `relation${f};`])
 const LAYER_QUERIES = {
-  streets: () => [`way["highway"]["highway"!~"${PATH_RE}"];`],
-  paths: () => [`way["highway"~"${PATH_RE}"];`],
+  highways: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.highways)}"];`],
+  mainRoads: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.mainRoads)}"];`],
+  streets: () => [`way["highway"]["highway"!~"${valuesRe(NON_STREET_VALUES)}"];`],
+  paths: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.paths)}"];`],
+  tracks: () => [`way["highway"~"${valuesRe(ROAD_CLASSES.tracks)}"];`],
+  places: () => [`node["place"~"${valuesRe(PLACE_VALUES)}"]["name"];`],
   coastlines: () => WAY_AND_RELATION(['["natural"="coastline"]']),
   water: () => WAY_AND_RELATION(['["natural"="water"]', '["landuse"="reservoir"]']),
   parks: () => WAY_AND_RELATION([
@@ -84,7 +101,7 @@ export async function updateOsmData() {
  * - https://wiki.openstreetmap.org/wiki/Overpass_API/Language_Guide
  * @param {[number,number,number,number]} bbox  [minLat, minLon, maxLat, maxLon]
  * @param {string[]} layerIds
- * @returns {Promise<Record<string, Map<string, [number,number][]>>>} layerId -> wayKey -> coords
+ * @returns {Promise<Record<string, Map<string, any>>>} layerId -> key -> coords (or place label)
  */
 export async function fetchOSMData(bbox, layerIds) {
   // ">>" recurses all the way down (relation → member ways → nodes).
@@ -114,11 +131,12 @@ out skel qt;`
 
 /**
  * Parse an Overpass JSON response into polylines bucketed by layer, keyed by
- * OSM id (`w<id>` for ways, `r<id>/w<id>` for relation members). Only the
- * requested layers are returned.
+ * OSM id (`w<id>` for ways, `r<id>/w<id>` for relation members). The `places`
+ * layer holds `{ coord, name, place, population }` label points keyed `n<id>`.
+ * Only the requested layers are returned.
  * @param {object} json
  * @param {string[]} layerIds
- * @returns {Record<string, Map<string, [number,number][]>>}
+ * @returns {Record<string, Map<string, any>>}
  */
 export function parseOSMData(json, layerIds) {
   // nodeId → [lon, lat], wayId → node ids, so relation members resolve
@@ -139,18 +157,31 @@ export function parseOSMData(json, layerIds) {
       t.landuse === 'meadow' || t.natural === 'wood',
     buildings: (t) => !!t.building,
     railways: (t) => !!t.railway,
-    streets: (t) => !!t.highway && !PATH_HIGHWAY_VALUES.includes(t.highway),
-    paths: (t) => PATH_HIGHWAY_VALUES.includes(t.highway),
+    highways: (t) => ROAD_CLASSES.highways.includes(t.highway),
+    mainRoads: (t) => ROAD_CLASSES.mainRoads.includes(t.highway),
+    streets: (t) => !!t.highway && !NON_STREET_VALUES.includes(t.highway),
+    paths: (t) => ROAD_CLASSES.paths.includes(t.highway),
+    tracks: (t) => ROAD_CLASSES.tracks.includes(t.highway),
   }
   // First matching *requested* layer wins, in this priority order.
-  const order = ['coastlines', 'water', 'parks', 'buildings', 'railways', 'streets', 'paths']
+  const order = ['coastlines', 'water', 'parks', 'buildings', 'railways', 'highways', 'mainRoads', 'streets', 'paths', 'tracks']
     .filter((id) => layerIds.includes(id))
   const layerFor = (tags) => order.find((id) => MATCHERS[id](tags)) ?? null
 
   const resolveCoords = (nodeIds) => (nodeIds ?? []).map((id) => nodes.get(id)).filter(Boolean)
 
   for (const el of json.elements) {
-    if (el.type === 'way') {
+    if (el.type === 'node') {
+      const t = el.tags
+      if (result.places && t?.name && PLACE_VALUES.includes(t.place)) {
+        result.places.set(`n${el.id}`, {
+          coord: [el.lon, el.lat],
+          name: t.name,
+          place: t.place,
+          population: Number.parseInt(t.population, 10) || 0,
+        })
+      }
+    } else if (el.type === 'way') {
       const layer = layerFor(el.tags ?? {})
       if (!layer) continue
       const coords = resolveCoords(el.nodes)

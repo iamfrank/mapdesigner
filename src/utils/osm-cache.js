@@ -9,7 +9,7 @@
  * Bboxes are [minLat, minLon, maxLat, maxLon].
  */
 
-export const LAYER_IDS = ['streets', 'paths', 'coastlines', 'water', 'parks', 'buildings', 'railways']
+export const LAYER_IDS = ['highways', 'mainRoads', 'streets', 'paths', 'tracks', 'coastlines', 'water', 'parks', 'buildings', 'railways', 'places']
 
 export function bboxContains(outer, inner) {
   return outer[0] <= inner[0] && outer[1] <= inner[1] && outer[2] >= inner[2] && outer[3] >= inner[3]

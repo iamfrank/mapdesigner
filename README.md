@@ -12,6 +12,17 @@ npm run dev
 npm run build
 ```
 
+## Styles
+
+Under **Styles**, layers are grouped into Areas, Lines, Roads and Labels and drawn in that order.
+Roads are split by OSM `highway=*` class: **Highways** (motorway/trunk), **Main roads**
+(primary/secondary/tertiary), **Streets** (everything else, e.g. residential/service),
+**Foot & cycle paths** and **Tracks**, each with its own colour and stroke width.
+**Place names** labels named `place=*` nodes (city, town, village, suburb, hamlet, ...), with
+colour, size, font and an optional halo in the background colour. Labels are sized relative
+to the page, larger places win, and overlapping or off-page labels are dropped.
+Enabling a layer that hasn't been loaded yet requires clicking **Fetch map data** again.
+
 ## Elevation contours
 
 The large map view loads public [Mapzen Terrarium terrain tiles](https://registry.opendata.aws/terrain-tiles/)

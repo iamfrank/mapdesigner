@@ -1,5 +1,6 @@
 import { toMercator, toCanvas } from './projection.js';
 import { renderLayerGeometry } from './geometry.js';
+import { renderPlaceLabels } from './labels.js';
 
 /**
  * Chain coastline ways end-to-end into longer polylines/rings by matching
@@ -377,6 +378,10 @@ export function drawPoster(ctx, { osmData, styles, transform, width, height, bac
 
     for (const style of styles) {
       if (!style.visible) continue;
+      if (style.mode === 'text') {
+        renderPlaceLabels(ctx, osmData[style.id], transform, style, { width, height, haloColor: backgroundColor, view });
+        continue;
+      }
       const s = style.mode === 'fill' || style.stroke >= minStroke ? style : { ...style, stroke: minStroke };
       renderLayerGeometry(ctx, osmData[style.id], transform, s, { view, tol });
     }
@@ -396,7 +401,7 @@ export function drawPoster(ctx, { osmData, styles, transform, width, height, bac
  */
 export function withContours(osmData, styles, contours, strokes) {
   if (!contours) return { osmData, styles };
-  const firstStroke = styles.findIndex((style) => style.mode !== 'fill');
+  const firstStroke = styles.findIndex((style) => style.mode === 'stroke');
   const index = firstStroke < 0 ? styles.length : firstStroke;
   return {
     osmData: { ...osmData, contoursMinor: contours.minor, contoursMajor: contours.major },
