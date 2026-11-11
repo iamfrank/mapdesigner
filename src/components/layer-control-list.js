@@ -40,13 +40,13 @@ export class LayerControlList extends HTMLElement {
           </layer-style-control>
         </li>`;
     this.innerHTML = `
+      <ul class="layer-control-list">
+        <li><background-style-control color="${state.get('backgroundStyle').color}"></background-style-control></li>
+      </ul>
       ${groups.map((g) => `
         ${g.name ? `<h3 class="layer-group-title">${g.name}</h3>` : ""}
         <ul class="layer-control-list">${g.styles.map(item).join("")}</ul>
       `).join("")}
-      <ul class="layer-control-list">
-        <li><background-style-control color="${state.get('backgroundStyle').color}"></background-style-control></li>
-      </ul>
     `;
   }
 

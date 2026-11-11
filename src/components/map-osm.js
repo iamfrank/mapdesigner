@@ -61,7 +61,7 @@ export class OsmMap extends HTMLElement {
     this.map = new Map({
       target: this.container,
       view: this.view,
-      layers: [new TileLayer({ source: new OSM() }), this.#frameLayer],
+      layers: [new TileLayer({ source: new OSM({attributions: false}) }), this.#frameLayer],
     });
 
     this.map.on('singleclick', (ev) => this.#commit(ev.coordinate));

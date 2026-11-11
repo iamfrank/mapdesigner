@@ -8,29 +8,38 @@
   </head>
   <body>
 
-    <section class="toolbar">
-      <h1>Mapdesigner</h1>
+    <main>
 
-      <h2>Location</h2>
-      <map-osm id="nav-map"></map-osm>
-      <fetch-data-control></fetch-data-control>
-
-      <details>
-        <summary>Styles</summary>
-        <layer-control-list></layer-control-list>
-        <terrain-controls></terrain-controls>
-      </details>
-      <details>
-        <summary>Size settings</summary>
-        <paper-size-control></paper-size-control>
-      </details>
-      <details>
-        <summary>Export</summary>
-        <poster-text-control></poster-text-control>
-        <export-pdf></export-pdf>
-      </details>
-      <footer>
+      <div class="statusbar">
+        <h1 class="header">Mapdesigner</h1>
         <status-notify></status-notify>
+      </div>
+
+      <map-artwork></map-artwork>
+
+    </main>
+
+    <section class="toolbar">
+      <div>
+        <h2>Location</h2>
+        <map-osm id="nav-map"></map-osm>
+        <fetch-data-control></fetch-data-control>
+        <details>
+          <summary>Styles</summary>
+          <layer-control-list></layer-control-list>
+          <terrain-controls></terrain-controls>
+        </details>
+        <details>
+          <summary>Size settings</summary>
+          <paper-size-control></paper-size-control>
+        </details>
+        <details>
+          <summary>Export</summary>
+          <poster-text-control></poster-text-control>
+          <export-pdf></export-pdf>
+        </details>
+      </div>
+      <footer>
         <p class="attribution">
           By <a href="https://github.com/iamfrank">Iamfrank</a>
           with support from
@@ -40,8 +49,6 @@
         </p>
       </footer>
     </section>
-
-    <map-artwork></map-artwork>
 
     <script type="module" src="./src/main.js"></script>
   </body>

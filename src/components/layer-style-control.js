@@ -57,29 +57,41 @@ export class LayerStyleControl extends HTMLElement {
 
   render(state) {
     const { id, mode } = state;
-    const colorLabel = mode === "fill" ? "Fill color" : mode === "text" ? "Text color" : "Stroke color";
+    const colorLabel = "Color";
     let extra = "";
     if (mode === "stroke") {
       extra = `
-      <label for="${id}-stroke">Stroke width</label>
-      <input class="layer-color-select" type="number" min="0" step="0.5" id="${id}-stroke" value="${state.stroke}">`;
+      <fieldset>
+        <label for="${id}-stroke">Stroke</label>
+        <input class="layer-color-select" type="number" min="0" step="0.5" id="${id}-stroke" value="${state.stroke}">
+      </fieldset>`;
     } else if (mode === "text") {
       extra = `
-      <label for="${id}-size">Text size</label>
-      <input class="layer-color-select" type="number" min="0.1" step="0.1" id="${id}-size" value="${state.size ?? 1}">
-      <label for="${id}-font">Font</label>
-      <select id="${id}-font">
-        ${FONTS.map(([value, name]) => `<option value="${value}" ${value === state.font ? "selected" : ""}>${name}</option>`).join("")}
-      </select>
-      <label for="${id}-halo">Halo</label>
-      <input type="checkbox" id="${id}-halo" ${state.halo !== false ? "checked" : ""}>`;
+      <fieldset>
+        <label for="${id}-size">Text size</label>
+        <input class="layer-color-select" type="number" min="0.1" step="0.1" id="${id}-size" value="${state.size ?? 1}">
+      </fieldset>
+      <fieldset>
+        <label for="${id}-font">Font</label>
+        <select id="${id}-font">
+          ${FONTS.map(([value, name]) => `<option value="${value}" ${value === state.font ? "selected" : ""}>${name}</option>`).join("")}
+        </select>
+      </fieldset>
+      <fieldset>
+        <label for="${id}-halo">Halo</label>
+        <input type="checkbox" id="${id}-halo" ${state.halo !== false ? "checked" : ""}>
+      </fieldset>`;
     }
     this.innerHTML = `
-      <input type="checkbox" id="${id}-visible" ${state.visible ? "checked" : ""}>
-      <label for="${id}-visible">${state.label}</label>
-      <label for="${id}-color">${colorLabel}</label>
-      <input class="layer-color-select" type="color" id="${id}-color" value="${state.color}">
+      <fieldset>
+        <input type="checkbox" id="${id}-visible" ${state.visible ? "checked" : ""}>
+        <label for="${id}-visible">${state.label}</label>
+      </fieldset>
       ${extra}
+      <fieldset>
+        <label for="${id}-color" class="sr-only">${colorLabel}</label>
+        <input class="layer-color-select" type="color" id="${id}-color" value="${state.color}">
+      </fieldset>
     `;
 
     const bind = (suffix, event, read) => {

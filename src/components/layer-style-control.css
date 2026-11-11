@@ -1,0 +1,12 @@
+layer-style-control {
+  display: flex;
+  flex-flow: row nowrap;
+  align-items: center;
+  justify-content: space-between;
+  border-top: solid 1px var(--border-color);
+
+  input[type="number"] {
+    max-width: 3rem;
+    text-align: right;
+  }
+}
