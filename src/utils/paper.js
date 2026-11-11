@@ -16,6 +16,14 @@ export const PAPER_SIZES = [
   { id: "custom", label: "Custom size…", w: null, h: null },
 ];
 
+/** Sheet sizes available for tiled (multi-sheet) PDF export, portrait, in mm. */
+export const TILE_SHEET_SIZES = [
+  { id: "A4", label: "A4", w: 210, h: 297 },
+  { id: "A3", label: "A3", w: 297, h: 420 },
+  { id: "letter", label: "US Letter", w: 215.9, h: 279.4 },
+  { id: "legal", label: "US Legal", w: 215.9, h: 355.6 },
+];
+
 export const DPI_OPTIONS = [150, 300, 600];
 
 const MM_PER_INCH = 25.4;

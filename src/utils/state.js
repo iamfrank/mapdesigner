@@ -41,6 +41,13 @@ const state = createStore({
   customHeightMM: 594,
   dpi: DEFAULT_DPI,
 
+  // Tiled PDF export: split the poster over several smaller sheets.
+  tileSheetId: "A4",
+  tileOrientation: "auto", // 'auto' | 'portrait' | 'landscape'
+  tileMarginMM: 10, // unprinted border per sheet (also holds marks/numbering)
+  tileOverlapMM: 10, // glue strip shared by neighbouring sheets
+  tileAssemblyGuide: true,
+
   // Poster text
   title: "",
   subtitle: "",
