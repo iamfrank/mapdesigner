@@ -1,11 +1,11 @@
+@import './variables.css';
 @import '../node_modules/ol/ol.css';
 @import './components/map-osm.css';
 @import './components/layer-style-control.css';
-
-:root {
-  --border-color: hsl(0,0%,20%);
-  --accent-color: hsl(40, 50%, 40%);
-}
+@import './components/background-style-control.css';
+@import './components/layer-control-list.css';
+@import './components/terrain-controls.css';
+@import './components/fetch-data-control.css';
 
 * {
   box-sizing: border-box;
@@ -14,9 +14,9 @@
 }
 
 body {
-  font: 1rem/1.3 sans-serif;
-  background: #111;
-  color: #aaa;
+  font: 0.9rem/1.3 sans-serif;
+  background: var(--background);
+  color: var(--text);
   display: flex;
   flex-direction: row nowrap;
   height: 100vh;
@@ -33,6 +33,29 @@ a:visited {
 a:hover,
 a:active {
   background-color: hsl(40,100%,20%);
+}
+
+button {
+  border: none;
+  background-color: var(--accent-color);
+  color: var(--background);
+  padding: 0.5rem 1rem;
+  transition: all 0.2s ease-in-out;
+
+  &:hover,
+  &:active {
+    background-color: var(--text);
+    transform: scale(1.1);
+  }
+}
+
+h1,
+h2,
+details > summary {
+  opacity: 0.5;
+  font-weight: 300;
+  margin: 0;
+  padding: 0;
 }
 
 details {
@@ -76,27 +99,25 @@ main {
   justify-content: space-between;
   padding: 1rem 1rem 0.5rem;
   gap: 1rem;
-
-  h1 {
-    opacity: 0.2;
-    font-weight: 300;
-  }
 }
 
 .toolbar {
-  max-width: 18rem;
+  width: 25rem;
   box-shadow: 0 0 0.75rem 0.25rem hsla(0,0%,0%,0.5);
   height: 100%;
   overflow: auto;
-  padding: 1rem 0.5rem;
+  display: flex;
+  flex-flow: column nowrap;
+  justify-content: space-between;
 
   h2 {
     font-size: 1rem;
-    opacity: 0.5;
-    font-weight: 300;
+    padding: 1rem 1rem 0.5rem;
   }
 
   footer {
+    text-align: right;
+    opacity: 0.6;
     padding: 1rem;
   }
 
@@ -105,33 +126,6 @@ main {
     height: 20rem;
     width: 100%;
   }
-}
-
-terrain-controls {
-  display: grid;
-  gap: 0.4rem;
-  margin-top: 1rem;
-  padding-top: 1rem;
-  border-top: 1px solid #222;
-  font-size: 0.8rem;
-
-  label {
-    display: flex;
-    align-items: center;
-    gap: 0.5rem;
-  }
-
-  select, button {
-    font: inherit;
-    color: inherit;
-    background: #222;
-    border: 1px solid #555;
-    border-radius: 0.25rem;
-    padding: 0.2rem 0.4rem;
-  }
-
-  small, .terrain-status { color: #bbb; }
-  a { font-size: 0.75rem; }
 }
 
 map-artwork {
@@ -185,33 +179,6 @@ map-artwork {
   }
 }
 
-layer-control-list {
-  display: block;
-  font-size: 0.8rem;
-
-  .layer-group-title {
-    margin: 1rem 0 0.4rem;
-    font-size: 0.75rem;
-    text-transform: uppercase;
-    letter-spacing: 0.08em;
-    color: #777;
-  }
-
-  .layer-control-list {
-    list-style: none;
-    display: grid;
-    gap: 0.5rem;
-  }
-
-  select {
-    font: inherit;
-    color: inherit;
-    background: #222;
-    border: 1px solid #555;
-    border-radius: 0.25rem;
-  }
-}
-
 export-pdf {
   display: block;
   margin-top: 1rem;
@@ -221,9 +188,8 @@ export-pdf {
     gap: 0.4rem;
     margin-top: 1rem;
     padding: 0.6rem;
-    border: 1px solid #333;
+    border: 1px solid var(--border-color);
     border-radius: 0.25rem;
-    font-size: 0.8rem;
 
     legend { padding: 0 0.3rem; }
 

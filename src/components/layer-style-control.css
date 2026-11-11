@@ -4,6 +4,7 @@ layer-style-control {
   align-items: center;
   justify-content: space-between;
   border-top: solid 1px var(--border-color);
+  padding: 0.5rem 0;
 
   input[type="number"] {
     max-width: 3rem;

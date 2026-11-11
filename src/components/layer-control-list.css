@@ -1,0 +1,23 @@
+layer-control-list {
+  display: block;
+
+  .layer-group-title {
+    margin: 1rem 0 0.4rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    color: #777;
+  }
+
+  .layer-control-list {
+    list-style: none;
+    display: grid;
+  }
+
+  select {
+    font: inherit;
+    color: inherit;
+    background: #222;
+    border: 1px solid #555;
+    border-radius: 0.25rem;
+  }
+}

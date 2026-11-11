@@ -26,7 +26,7 @@ export class TerrainControls extends HTMLElement {
       </label>
       <span class="terrain-status" role="status" aria-live="polite"></span>
       <button type="button" data-act="retry-terrain" hidden>Retry contours</button>
-      <small>Included in PNG/PDF exports</small>
+      Included in PNG/PDF exports
       <a href="https://github.com/tilezen/joerd/blob/master/docs/attribution.md" target="_blank" rel="noopener noreferrer">Elevation: Mapzen terrain / sources</a>
     `
     this.#terrainToggleEl = this.querySelector('[name="contours"]')

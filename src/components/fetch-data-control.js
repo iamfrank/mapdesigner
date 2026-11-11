@@ -9,7 +9,7 @@ export class FetchDataControl extends HTMLElement {
   #button
 
   connectedCallback() {
-    this.innerHTML = `<button id="btn-fetch-data">Fetch map data</button>`;
+    this.innerHTML = `<button id="btn-fetch-data">Update map data</button>`;
     this.#button = this.querySelector('#btn-fetch-data');
     this.#button.addEventListener('click', () => this.#fetch());
   }
