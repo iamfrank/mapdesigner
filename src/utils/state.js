@@ -73,7 +73,25 @@ const state = createStore({
     color: "#001100"
   },
   statusText: "",
+  // Number of in-flight background tasks (see trackBusy); >0 shows a spinner.
+  busy: 0,
 });
+
+/**
+ * Run an async task while flagging the app as busy, so status notifications
+ * show a loading spinner. Safe to nest/overlap: a counter is used.
+ * @template T
+ * @param {() => Promise<T>} task
+ * @returns {Promise<T>}
+ */
+export async function trackBusy(task) {
+  state.set("busy", state.get("busy") + 1);
+  try {
+    return await task();
+  } finally {
+    state.set("busy", Math.max(0, state.get("busy") - 1));
+  }
+}
 
 /** Current print canvas pixel dimensions, derived from paper size + DPI. */
 export function getPrintPx() {

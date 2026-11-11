@@ -39,14 +39,18 @@ function mountControls(t) {
   return { controls, toggle, interval, status, retry, workers }
 }
 
+// trackBusy() settles asynchronously; let pending promise callbacks run.
+const settle = () => new Promise((resolve) => setImmediate(resolve))
+
 const resultFor = (id) => ({ id, minor: [[[12, 55], [12.1, 55.1]]], major: [], interval: 10 })
 
-test('terrain controls render light DOM and publish debounced worker results', (t) => {
+test('terrain controls render light DOM and publish debounced worker results', async (t) => {
   const { controls, status, workers } = mountControls(t)
   assert.match(controls.innerHTML, /Contour lines/)
   assert.match(controls.innerHTML, /Included in PNG\/PDF exports/)
   assert.equal(controls.shadowRoot, undefined)
   assert.equal(status.textContent, 'Loading terrain…')
+  assert.equal(state.get('busy'), 1)
   t.mock.timers.tick(299)
   assert.equal(workers.length, 0)
   t.mock.timers.tick(1)
@@ -58,6 +62,8 @@ test('terrain controls render light DOM and publish debounced worker results', (
   workers[0].reply(result)
   assert.equal(state.get('contours'), result)
   assert.equal(status.textContent, '10 m contours · bold every 50 m')
+  await settle()
+  assert.equal(state.get('busy'), 0)
 })
 
 test('bbox and interval changes cancel stale contours and only load the settled selection', (t) => {
@@ -80,7 +86,7 @@ test('bbox and interval changes cancel stale contours and only load the settled 
   assert.equal(worker.messages.filter(({ cancel }) => !cancel).length, 2)
 })
 
-test('turning contours off disables the interval and ignores pending results', (t) => {
+test('turning contours off disables the interval and ignores pending results', async (t) => {
   const { toggle, interval, status, workers } = mountControls(t)
   t.mock.timers.tick(300)
   const worker = workers[0]
@@ -90,6 +96,8 @@ test('turning contours off disables the interval and ignores pending results', (
   toggle.dispatchEvent(new Event('change'))
   assert.equal(interval.disabled, true)
   assert.equal(status.textContent, 'Contours off')
+  await settle()
+  assert.equal(state.get('busy'), 0)
   assert.equal(state.get('contours'), null)
   worker.reply(resultFor(request.id))
   assert.equal(state.get('contours'), null)
@@ -102,19 +110,24 @@ test('turning contours off disables the interval and ignores pending results', (
   assert.equal(worker.messages.at(-1).cancel, undefined)
 })
 
-test('terrain errors can be retried and disconnect cleans up requests and subscriptions', (t) => {
+test('terrain errors can be retried and disconnect cleans up requests and subscriptions', async (t) => {
   const { controls, status, retry, workers } = mountControls(t)
   t.mock.timers.tick(300)
   const worker = workers[0]
   worker.reply({ id: worker.messages.at(-1).id, error: 'Tile unavailable' })
   assert.equal(retry.hidden, false)
   assert.match(status.textContent, /Tile unavailable/)
+  await settle()
+  assert.equal(state.get('busy'), 0)
   retry.dispatchEvent(new Event('click'))
   assert.equal(retry.hidden, true)
+  assert.equal(state.get('busy'), 1)
   t.mock.timers.tick(300)
   const pending = worker.messages.at(-1)
   controls.disconnectedCallback()
   assert.equal(worker.terminated, true)
+  await settle()
+  assert.equal(state.get('busy'), 0)
   state.set('bbox', [54, 11, 55, 12])
   t.mock.timers.tick(300)
   worker.reply(resultFor(pending.id))

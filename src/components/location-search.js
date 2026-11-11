@@ -1,4 +1,4 @@
-import state from '../utils/state.js';
+import state, { trackBusy } from '../utils/state.js';
 import { geocodeSearch } from '../utils/geocode.js';
 
 const COORD_PATTERN = /^\s*(-?\d+(?:\.\d+)?)\s*,\s*(-?\d+(?:\.\d+)?)\s*$/;
@@ -40,7 +40,7 @@ export class LocationSearch extends HTMLElement {
 
     state.set('statusText', `Searching for "${query}"…`);
     try {
-      const [result] = await geocodeSearch(query);
+      const [result] = await trackBusy(() => geocodeSearch(query));
       if (!result) {
         state.set('statusText', `No results found for "${query}".`);
         return;

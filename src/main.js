@@ -1,6 +1,7 @@
 import { LayerControlList } from "./components/layer-control-list.js";
 import { OsmMap } from "./components/map-osm.js";
 import { ArtworkMap } from "./components/map-artwork.js";
+import { LoadingSpinner } from "./components/loading-spinner.js";
 import { StatusNotify } from "./components/status-notify.js";
 import { ExportPDF } from "./components/export-pdf.js";
 import { LocationSearch } from "./components/location-search.js";
@@ -12,6 +13,7 @@ import { TerrainControls } from "./components/terrain-controls.js";
 customElements.define("layer-control-list", LayerControlList);
 customElements.define("map-artwork", ArtworkMap);
 customElements.define("map-osm", OsmMap);
+customElements.define("loading-spinner", LoadingSpinner);
 customElements.define("status-notify", StatusNotify);
 customElements.define("export-pdf", ExportPDF);
 customElements.define("location-search", LocationSearch);

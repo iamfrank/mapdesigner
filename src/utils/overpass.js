@@ -1,4 +1,4 @@
-import { OVERPASS_URL } from './state.js'
+import { OVERPASS_URL, trackBusy } from './state.js'
 import state from './state.js'
 import { LAYER_IDS, createOsmCache } from './osm-cache.js'
 
@@ -91,7 +91,7 @@ export async function updateOsmData() {
 
   fetching = true
   try {
-    const result = await fetchOSMData(bbox, missing)
+    const result = await trackBusy(() => fetchOSMData(bbox, missing))
     const changed = cache.add(missing, bbox, result)
     const prev = state.get('osmData')
     const osmData = buildOsmData(prev, changed)

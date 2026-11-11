@@ -1,6 +1,6 @@
 import { computeTransform } from './projection.js';
 import { drawPoster, withContours } from './render.js';
-import { getPrintPx, getTitleBlock } from './state.js';
+import { getPrintPx, getTitleBlock, trackBusy } from './state.js';
 import state from './state.js'
 import { resolvePaperMM, TILE_SHEET_SIZES } from './paper.js';
 import { computeTileLayout } from './tiling.js';
@@ -61,17 +61,17 @@ export async function exportPNG(osmData, bbox) {
     `⚠ This may use a large amount of memory and take a while, especially on mobile.`
   );
   if (!confirmed) return;
-
-  state.set('statusText', 'Rendering print canvas… (this may take a moment)')
-  await new Promise((r) => setTimeout(r, 60));
-
-  try {
-    const offscreen = renderPrintCanvas(osmData, bbox);
-
-    state.set('statusText', 'Encoding PNG…')
+  await trackBusy(async () => {
+    state.set('statusText', 'Rendering print canvas… (this may take a moment)')
     await new Promise((r) => setTimeout(r, 60));
 
-    offscreen.toBlob((blob) => {
+    try {
+      const offscreen = renderPrintCanvas(osmData, bbox);
+
+      state.set('statusText', 'Encoding PNG…')
+      await new Promise((r) => setTimeout(r, 60));
+
+      const blob = await new Promise((resolve) => offscreen.toBlob(resolve, 'image/png'));
       if (!blob) {
         state.set('statusText', 'Export failed: PNG encoding returned no data.')
         return;
@@ -87,13 +87,13 @@ export async function exportPNG(osmData, bbox) {
       URL.revokeObjectURL(url);
 
       state.set('statusText', `Export complete — ${a.download} downloaded.`)
-    }, 'image/png');
-  } catch (err) {
-    const msg = `Export failed: ${err.message}`;
-    state.set('statusText', msg)
-    alert(msg);
-    console.error(err);
-  }
+    } catch (err) {
+      const msg = `Export failed: ${err.message}`;
+      state.set('statusText', msg)
+      alert(msg);
+      console.error(err);
+    }
+  });
 }
 
 /**
@@ -109,41 +109,42 @@ export async function exportPDF(osmData, bbox) {
     `⚠ This may use a large amount of memory and take a while, especially on mobile.`
   );
   if (!confirmed) return;
-
-  state.set('statusText', 'Rendering print canvas… (this may take a moment)')
-  await new Promise((r) => setTimeout(r, 60));
-
-  try {
-    const { jsPDF } = await import('jspdf');
-    const { wMM, hMM } = resolvePaperMM({
-      paperSizeId: state.get('paperSizeId'),
-      customWidthMM: state.get('customWidthMM'),
-      customHeightMM: state.get('customHeightMM'),
-    });
-
-    const offscreen = renderPrintCanvas(osmData, bbox);
-
-    state.set('statusText', 'Encoding PDF…')
+  await trackBusy(async () => {
+    state.set('statusText', 'Rendering print canvas… (this may take a moment)')
     await new Promise((r) => setTimeout(r, 60));
 
-    const imgData = offscreen.toDataURL('image/png');
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { wMM, hMM } = resolvePaperMM({
+        paperSizeId: state.get('paperSizeId'),
+        customWidthMM: state.get('customWidthMM'),
+        customHeightMM: state.get('customHeightMM'),
+      });
 
-    const pdf = new jsPDF({
-      orientation: hMM >= wMM ? 'portrait' : 'landscape',
-      unit: 'mm',
-      format: [wMM, hMM],
-      compress: true,
-    });
-    pdf.addImage(imgData, 'PNG', 0, 0, wMM, hMM, undefined, 'FAST');
-    pdf.save(slugFilename('pdf'));
+      const offscreen = renderPrintCanvas(osmData, bbox);
 
-    state.set('statusText', 'Export complete — PDF downloaded.')
-  } catch (err) {
-    const msg = `Export failed: ${err.message}`;
-    state.set('statusText', msg)
-    alert(msg);
-    console.error(err);
-  }
+      state.set('statusText', 'Encoding PDF…')
+      await new Promise((r) => setTimeout(r, 60));
+
+      const imgData = offscreen.toDataURL('image/png');
+
+      const pdf = new jsPDF({
+        orientation: hMM >= wMM ? 'portrait' : 'landscape',
+        unit: 'mm',
+        format: [wMM, hMM],
+        compress: true,
+      });
+      pdf.addImage(imgData, 'PNG', 0, 0, wMM, hMM, undefined, 'FAST');
+      pdf.save(slugFilename('pdf'));
+
+      state.set('statusText', 'Export complete — PDF downloaded.')
+    } catch (err) {
+      const msg = `Export failed: ${err.message}`;
+      state.set('statusText', msg)
+      alert(msg);
+      console.error(err);
+    }
+  });
 }
 
 /** Current tiled-export layout (in mm), derived from paper + tiling state. */
@@ -188,66 +189,67 @@ export async function exportTiledPDF(osmData, bbox) {
     `⚠ This may use a large amount of memory and take a while, especially on mobile.`
   );
   if (!confirmed) return;
+  await trackBusy(async () => {
+    state.set('statusText', 'Rendering print canvas… (this may take a moment)');
+    await new Promise((r) => setTimeout(r, 60));
 
-  state.set('statusText', 'Rendering print canvas… (this may take a moment)');
-  await new Promise((r) => setTimeout(r, 60));
+    try {
+      const { jsPDF } = await import('jspdf');
+      const { drawTileSheet, drawAssemblyGuide } = await import('./tiling-pdf.js');
 
-  try {
-    const { jsPDF } = await import('jspdf');
-    const { drawTileSheet, drawAssemblyGuide } = await import('./tiling-pdf.js');
+      const offscreen = renderPrintCanvas(osmData, bbox);
+      const kx = offscreen.width / posterW;
+      const ky = offscreen.height / posterH;
+      const title = state.get('title')?.trim() ?? '';
 
-    const offscreen = renderPrintCanvas(osmData, bbox);
-    const kx = offscreen.width / posterW;
-    const ky = offscreen.height / posterH;
-    const title = state.get('title')?.trim() ?? '';
+      const { sheetW, sheetH } = layout;
+      const orientation = sheetW > sheetH ? 'landscape' : 'portrait';
+      const pdf = new jsPDF({ orientation, unit: 'mm', format: [sheetW, sheetH], compress: true });
 
-    const { sheetW, sheetH } = layout;
-    const orientation = sheetW > sheetH ? 'landscape' : 'portrait';
-    const pdf = new jsPDF({ orientation, unit: 'mm', format: [sheetW, sheetH], compress: true });
+      if (state.get('tileAssemblyGuide')) {
+        // Downscaled preview of the whole poster for the guide page.
+        const scale = Math.min(1, 1600 / Math.max(offscreen.width, offscreen.height));
+        const thumb = document.createElement('canvas');
+        thumb.width = Math.max(1, Math.round(offscreen.width * scale));
+        thumb.height = Math.max(1, Math.round(offscreen.height * scale));
+        const tctx = thumb.getContext('2d');
+        tctx.imageSmoothingQuality = 'high';
+        tctx.drawImage(offscreen, 0, 0, thumb.width, thumb.height);
+        drawAssemblyGuide(pdf, layout, thumb, {
+          posterW, posterH, title,
+          posterLabel: state.get('paperSizeId') === 'custom'
+            ? `${posterW} x ${posterH} mm`
+            : `${state.get('paperSizeId')} (${posterW} x ${posterH} mm)`,
+          sheetLabel: `${sheet.label} ${orientation}`,
+        });
+        pdf.addPage([sheetW, sheetH], orientation);
+      }
 
-    if (state.get('tileAssemblyGuide')) {
-      // Downscaled preview of the whole poster for the guide page.
-      const scale = Math.min(1, 1600 / Math.max(offscreen.width, offscreen.height));
-      const thumb = document.createElement('canvas');
-      thumb.width = Math.max(1, Math.round(offscreen.width * scale));
-      thumb.height = Math.max(1, Math.round(offscreen.height * scale));
-      const tctx = thumb.getContext('2d');
-      tctx.imageSmoothingQuality = 'high';
-      tctx.drawImage(offscreen, 0, 0, thumb.width, thumb.height);
-      drawAssemblyGuide(pdf, layout, thumb, {
-        posterW, posterH, title,
-        posterLabel: state.get('paperSizeId') === 'custom'
-          ? `${posterW} x ${posterH} mm`
-          : `${state.get('paperSizeId')} (${posterW} x ${posterH} mm)`,
-        sheetLabel: `${sheet.label} ${orientation}`,
-      });
-      pdf.addPage([sheetW, sheetH], orientation);
+      const tileCanvas = document.createElement('canvas');
+      const tctx = tileCanvas.getContext('2d');
+      for (const [i, tile] of layout.tiles.entries()) {
+        state.set('statusText', `Encoding sheet ${tile.label} (${i + 1} of ${layout.tiles.length})…`);
+        await new Promise((r) => setTimeout(r, 0));
+
+        const sx = Math.round(tile.x * kx);
+        const sy = Math.round(tile.y * ky);
+        const sw = Math.max(1, Math.min(offscreen.width, Math.round((tile.x + tile.w) * kx)) - sx);
+        const sh = Math.max(1, Math.min(offscreen.height, Math.round((tile.y + tile.h) * ky)) - sy);
+        tileCanvas.width = sw;
+        tileCanvas.height = sh;
+        tctx.drawImage(offscreen, sx, sy, sw, sh, 0, 0, sw, sh);
+
+        if (i > 0) pdf.addPage([sheetW, sheetH], orientation);
+        drawTileSheet(pdf, layout, tile, tileCanvas.toDataURL('image/png'), { title });
+      }
+
+      pdf.save(slugFilename('pdf').replace(/\.pdf$/, `-tiled-${sheet.id.toLowerCase()}.pdf`));
+      state.set('statusText', `Export complete — ${layout.tiles.length}-sheet tiled PDF downloaded.`);
+    } catch (err) {
+      const msg = `Export failed: ${err.message}`;
+      state.set('statusText', msg);
+      alert(msg);
+      console.error(err);
     }
-
-    const tileCanvas = document.createElement('canvas');
-    const tctx = tileCanvas.getContext('2d');
-    for (const [i, tile] of layout.tiles.entries()) {
-      state.set('statusText', `Encoding sheet ${tile.label} (${i + 1} of ${layout.tiles.length})…`);
-      await new Promise((r) => setTimeout(r, 0));
-
-      const sx = Math.round(tile.x * kx);
-      const sy = Math.round(tile.y * ky);
-      const sw = Math.max(1, Math.min(offscreen.width, Math.round((tile.x + tile.w) * kx)) - sx);
-      const sh = Math.max(1, Math.min(offscreen.height, Math.round((tile.y + tile.h) * ky)) - sy);
-      tileCanvas.width = sw;
-      tileCanvas.height = sh;
-      tctx.drawImage(offscreen, sx, sy, sw, sh, 0, 0, sw, sh);
-
-      if (i > 0) pdf.addPage([sheetW, sheetH], orientation);
-      drawTileSheet(pdf, layout, tile, tileCanvas.toDataURL('image/png'), { title });
-    }
-
-    pdf.save(slugFilename('pdf').replace(/\.pdf$/, `-tiled-${sheet.id.toLowerCase()}.pdf`));
-    state.set('statusText', `Export complete — ${layout.tiles.length}-sheet tiled PDF downloaded.`);
-  } catch (err) {
-    const msg = `Export failed: ${err.message}`;
-    state.set('statusText', msg);
-    alert(msg);
-    console.error(err);
-  }
+  });
 }

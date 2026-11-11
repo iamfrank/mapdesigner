@@ -1,4 +1,4 @@
-import state from '../utils/state.js'
+import state, { trackBusy } from '../utils/state.js'
 
 /** Loads elevation contours and exposes their settings in the Styles panel. */
 export class TerrainControls extends HTMLElement {
@@ -11,6 +11,7 @@ export class TerrainControls extends HTMLElement {
   #terrainStatusEl
   #terrainRetryEl
   #unsubscribe
+  #finishBusy = null // resolves the trackBusy() task while a load is pending
 
   connectedCallback() {
     this.innerHTML = `
@@ -51,13 +52,25 @@ export class TerrainControls extends HTMLElement {
     this.#terrainWorker = null
     this.#terrainKey = null
     this.#terrainRequest++
+    this.#setLoading(false)
     state.set('contours', null)
+  }
+
+  /** Keep the global busy indicator on from queueing until a result/error/cancel. */
+  #setLoading(loading) {
+    if (loading && !this.#finishBusy) {
+      trackBusy(() => new Promise((resolve) => { this.#finishBusy = resolve }))
+    } else if (!loading && this.#finishBusy) {
+      this.#finishBusy()
+      this.#finishBusy = null
+    }
   }
 
   #terrainError(message) {
     this.#terrainStatusEl.textContent = `Contours unavailable: ${message}`
     this.#terrainRetryEl.hidden = false
     this.#terrainKey = null
+    this.#setLoading(false)
   }
 
   #queueContours() {
@@ -74,6 +87,7 @@ export class TerrainControls extends HTMLElement {
     state.set('contours', null) // Never show terrain from a previous geographic area.
     this.#terrainRetryEl.hidden = true
     this.#terrainStatusEl.textContent = enabled ? 'Loading terrain…' : 'Contours off'
+    this.#setLoading(Boolean(key))
     if (!key) return
 
     // Navigation updates can arrive in quick succession. Only fetch the settled area.
@@ -85,6 +99,7 @@ export class TerrainControls extends HTMLElement {
           worker.onmessage = ({ data }) => {
             if (data.id !== this.#terrainRequest) return
             if (data.error) { this.#terrainError(data.error); return }
+            this.#setLoading(false)
             state.set('contours', data)
             const count = data.minor.length + data.major.length
             this.#terrainStatusEl.textContent = count

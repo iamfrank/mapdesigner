@@ -1,0 +1,37 @@
+export-pdf {
+  display: block;
+  margin-top: 1rem;
+
+  .export-tiled {
+    display: grid;
+    gap: 0.4rem;
+    margin-top: 1rem;
+    padding: 0.6rem;
+    border: 1px solid var(--border-color);
+    border-radius: 0.25rem;
+
+    legend { padding: 0 0.3rem; }
+
+    label {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 0.5rem;
+
+      &.checkbox { justify-content: flex-start; }
+    }
+
+    input[type="number"] { width: 5em; }
+
+    select, input[type="number"] {
+      font: inherit;
+      color: inherit;
+      background: #222;
+      border: 1px solid #555;
+      border-radius: 0.25rem;
+      padding: 0.1rem 0.3rem;
+    }
+
+    .tile-info { color: #bbb; }
+  }
+}
